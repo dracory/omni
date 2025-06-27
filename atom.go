@@ -110,6 +110,32 @@ func (a *Atom) RemoveProperty(name string) {
 	}
 }
 
+// AddChild adds a new child atom.
+// If the child is nil, it will be ignored.
+func (a *Atom) AddChild(child AtomInterface) {
+	if child == nil {
+		return
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.children = append(a.children, child)
+}
+
+// AddChildren adds multiple child atoms at once.
+// If any of the children are nil, they will be ignored.
+func (a *Atom) AddChildren(children []AtomInterface) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		a.children = append(a.children, child)
+	}
+}
+
 // GetChildren returns all child atoms.
 func (a *Atom) GetChildren() []AtomInterface {
 	a.mu.RLock()
@@ -121,14 +147,9 @@ func (a *Atom) GetChildren() []AtomInterface {
 	return children
 }
 
-// AddChild adds a new child atom.
-// If the child is nil, it will be ignored.
-func (a *Atom) AddChild(child AtomInterface) {
-	if child == nil {
-		return
-	}
-
+// SetChildren sets all child atoms at once.
+func (a *Atom) SetChildren(children []AtomInterface) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.children = append(a.children, child)
+	a.children = children
 }

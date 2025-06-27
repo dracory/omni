@@ -88,12 +88,25 @@ func (a *mockAtom) RemoveProperty(name string) {
 	}
 }
 
+func (a *mockAtom) SetChildren(children []omni.AtomInterface) {
+	a.children = children
+}
+
 func (a *mockAtom) GetChildren() []omni.AtomInterface {
 	return a.children
 }
 
 func (a *mockAtom) AddChild(child omni.AtomInterface) {
 	a.children = append(a.children, child)
+}
+
+func (a *mockAtom) AddChildren(children []omni.AtomInterface) {
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		a.children = append(a.children, child)
+	}
 }
 
 func TestPropertyInterface(t *testing.T) {

@@ -13,19 +13,25 @@ type PropertyInterface interface {
 // It defines the methods necessary for the system to understand and process any atom,
 // regardless of its specific type.
 type AtomInterface interface {
+	// ID
 	GetID() string
 	SetID(id string)
 
+	// Type
 	GetType() string
 	SetType(atomType string)
 
+	// Properties
 	GetProperties() []PropertyInterface
 	SetProperties(properties []PropertyInterface)
 
 	GetProperty(name string) PropertyInterface
-	SetProperty(property PropertyInterface)
 	RemoveProperty(name string)
+	SetProperty(property PropertyInterface)
 
-	GetChildren() []AtomInterface
+	// Children
 	AddChild(a AtomInterface)
+	AddChildren(children []AtomInterface)
+	GetChildren() []AtomInterface
+	SetChildren(children []AtomInterface)
 }
