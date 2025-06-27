@@ -65,8 +65,37 @@ type AtomInterface interface {
 }
 ```
 
+## Installation
+
+```bash
+go get github.com/dracory/omni
+```
+
 ## Usage
 
 1. Implement the `PropertyInterface` for custom property types
 2. Implement the `AtomInterface` for custom atom types
 3. Use the interfaces to create a flexible, composable system of atoms with properties
+
+## Examples
+
+Check out the [examples](./examples) directory for complete, runnable examples:
+
+- [Basic Example](./examples/basic/basic_example.go) - Demonstrates core functionality
+- [Advanced Example](./examples/advanced/concurrent_example.go) - Shows concurrent usage patterns
+
+To run the examples:
+
+```bash
+# Basic example
+cd examples/basic
+go run basic_example.go
+
+# Advanced example
+cd examples/advanced
+go run concurrent_example.go
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
