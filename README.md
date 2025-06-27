@@ -2,6 +2,13 @@
 
 A universal Go module providing core interfaces for composable primitives.
 
+<img src="https://opengraph.githubassets.com/5b92c81c05d64a82c3fb4ba95739403a2d38cbad61f260a0701b3366b3d10327/dracory/omni" />
+
+[![Tests Status](https://github.com/dracory/omni/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/dracory/omni/actions/workflows/tests.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dracory/omni)](https://goreportcard.com/report/github.com/dracory/omni)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/dracory/omni)](https://pkg.go.dev/github.com/dracory/omni)
+
+
 ## Introduction
 
 Omni is a powerful Go package that provides a flexible, composable architecture for building structured data models. It's designed around two core interfaces: `Property` for storing attribute-value pairs, and `Atom` for creating hierarchical, composable data structures.
@@ -43,26 +50,6 @@ The package follows a simple yet powerful architecture:
 
 ## Interfaces
 
-### PropertyInterface
-
-`PropertyInterface` defines the contract for any abstract attribute or characteristic. Any concrete property type must implement this interface.
-
-```go
-type PropertyInterface interface {
-    // GetName returns the name of the property
-    GetName() string
-    
-    // SetName sets the name of the property
-    SetName(name string)
-    
-    // GetValue returns the string representation of the property's value
-    GetValue() string
-    
-    // SetValue sets the property's value from a string
-    SetValue(value string)
-}
-```
-
 ### AtomInterface
 
 `AtomInterface` is the universal interface that all composable primitives must satisfy. It defines the methods necessary for the system to understand and process any atom, regardless of its specific type.
@@ -101,6 +88,27 @@ type AtomInterface interface {
     
     // AddChild adds a new child atom
     AddChild(a AtomInterface)
+}
+```
+
+
+### PropertyInterface
+
+`PropertyInterface` defines the contract for any abstract attribute or characteristic. Any concrete property type must implement this interface.
+
+```go
+type PropertyInterface interface {
+    // GetName returns the name of the property
+    GetName() string
+    
+    // SetName sets the name of the property
+    SetName(name string)
+    
+    // GetValue returns the string representation of the property's value
+    GetValue() string
+    
+    // SetValue sets the property's value from a string
+    SetValue(value string)
 }
 ```
 
