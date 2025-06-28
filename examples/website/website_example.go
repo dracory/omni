@@ -13,18 +13,30 @@ import (
 // createPage creates a new page with a header and paragraph
 func createPage(site *omni.Atom, pageID, uri, title, headerText, paragraphText string) {
 	// Create the page
-	page := omni.NewAtom(pageID, "page")
-	page.SetProperty(omni.NewProperty("title", title))
-	page.SetProperty(omni.NewProperty("uri", uri))
+	page := omni.NewAtom("page",
+		omni.WithID(pageID),
+		omni.WithProperties(
+			omni.NewProperty("title", title),
+			omni.NewProperty("uri", uri),
+		),
+	)
 
 	// Add header
-	header := omni.NewAtom(pageID+"_header", "header")
-	header.SetProperty(omni.NewProperty("text", headerText))
+	header := omni.NewAtom("header",
+		omni.WithID(pageID+"_header"),
+		omni.WithProperties(
+			omni.NewProperty("text", headerText),
+		),
+	)
 	page.AddChild(header)
 
 	// Add paragraph
-	paragraph := omni.NewAtom(pageID+"_paragraph", "paragraph")
-	paragraph.SetProperty(omni.NewProperty("content", paragraphText))
+	paragraph := omni.NewAtom("paragraph",
+		omni.WithID(pageID+"paragraph"),
+		omni.WithProperties(
+			omni.NewProperty("content", paragraphText),
+		),
+	)
 	page.AddChild(paragraph)
 
 	// Add page to site
@@ -118,8 +130,12 @@ func main() {
 	flag.Parse()
 
 	// Create the website root
-	site := omni.NewAtom("my_website", "website")
-	site.SetProperty(omni.NewProperty("name", "My Awesome Site"))
+	site := omni.NewAtom("website",
+		omni.WithID("my_website"),
+		omni.WithProperties(
+			omni.NewProperty("name", "My Awesome Site"),
+		),
+	)
 
 	// Add home page
 	createPage(site, "home", "/", "Home", "Welcome to My Website",

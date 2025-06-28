@@ -4,13 +4,18 @@ package main
 import (
 	"fmt"
 	"sync"
+
 	"github.com/dracory/omni"
 )
 
 func main() {
-	// Create a document atom
-	doc := omni.NewAtom("doc1", "document")
-	doc.SetProperty(omni.NewProperty("title", "Concurrent Document"))
+	// Create a document atom with initial properties
+	doc := omni.NewAtom("document",
+		omni.WithID("doc1"),
+		omni.WithProperties(
+			omni.NewProperty("title", "Concurrent Document"),
+		),
+	)
 
 	// Number of concurrent workers
 	const numWorkers = 5
@@ -18,25 +23,43 @@ func main() {
 
 	// Use a wait group to wait for all goroutines to finish
 	var wg sync.WaitGroup
-	wg.Add(numWorkers)
-
+	var mu sync.Mutex
 
 	// Start concurrent workers to update the document
 	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 
+			// Local slice to collect this worker's children
+			var children []omni.AtomInterface
+
+			// Add properties and create children
 			for j := 0; j < updatesPerWorker; j++ {
 				// Each worker adds a new property with a unique name
 				propName := fmt.Sprintf("worker%d_update%d", workerID, j)
-				doc.SetProperty(omni.NewProperty(propName, "value"))
+				
+				// Create and add property atomically
+				prop := omni.NewProperty(propName, "value")
+				mu.Lock()
+				doc.SetProperty(prop)
+				mu.Unlock()
 
-				// Also add a child atom
-				child := omni.NewAtom(
-					fmt.Sprintf("child_w%d_u%d", workerID, j),
-					fmt.Sprintf("type_%d", j%3), // Different types for variety
+				// Create child atom with type based on iteration
+				childType := fmt.Sprintf("type_%d", j%3)
+				child := omni.NewAtom(childType,
+					omni.WithID(fmt.Sprintf("child_w%d_u%d", workerID, j)),
 				)
-				doc.AddChild(child)
+				children = append(children, child)
+			}
+
+			// Add all children atomically one by one
+			if len(children) > 0 {
+				mu.Lock()
+				for _, child := range children {
+					doc.AddChild(child)
+				}
+				mu.Unlock()
 			}
 		}(i)
 	}

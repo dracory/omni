@@ -34,4 +34,12 @@ type AtomInterface interface {
 	AddChildren(children []AtomInterface)
 	GetChildren() []AtomInterface
 	SetChildren(children []AtomInterface)
+
+	// Serialization
+	ToMap() map[string]any
+	ToJson() (string, error)
+	ToJsonPretty() (string, error)
+
+	// toJsonObject is an internal method for JSON serialization
+	toJsonObject() AtomJsonObject
 }

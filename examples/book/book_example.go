@@ -3,6 +3,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/dracory/omni"
 )
 
@@ -16,50 +18,67 @@ var loremIpsum = []string{
 }
 
 // createPage creates a new page with the given number and content
-func createPage(book *omni.Atom, pageNum int, content1, content2 string) {
-	page := omni.NewAtom(fmt.Sprintf("page_%d", pageNum), "page")
-	page.SetProperty(omni.NewProperty("number", fmt.Sprintf("%d", pageNum)))
-	page.SetProperty(omni.NewProperty("content_1", content1))
-	page.SetProperty(omni.NewProperty("content_2", content2))
-	book.AddChild(page)
+func createPage(id string, pageNum int, content1, content2 string) omni.AtomInterface {
+	return omni.NewAtom("page",
+		omni.WithID(id),
+		omni.WithProperties(
+			omni.NewProperty("number", strconv.Itoa(pageNum)),
+			omni.NewProperty("content_1", content1),
+			omni.NewProperty("content_2", content2),
+		),
+	)
 }
 
 // printBook recursively prints the book structure
-func printBook(atom omni.AtomInterface, indent string) {
-	// Print current atom
-	fmt.Printf("%s- %s (%s)\n", indent, atom.GetID(), atom.GetType())
-
-	// Print properties with additional indentation
-	for _, prop := range atom.GetProperties() {
-		value := prop.GetValue()
-		if len(value) > 50 { // Truncate long content
-			value = value[:50] + "..."
-		}
-		fmt.Printf("%s  %s: %s\n", indent, prop.GetName(), value)
+func printBook(atom omni.AtomInterface, indent int) {
+	prefix := ""
+	for i := 0; i < indent; i++ {
+		prefix += "  "
 	}
 
-	// Recursively print children
+	fmt.Printf("%s- %s (type: %s)\n", prefix, atom.GetID(), atom.GetType())
+	for _, prop := range atom.GetProperties() {
+		fmt.Printf("%s  %s: %v\n", prefix, prop.GetName(), prop.GetValue())
+	}
+
 	for _, child := range atom.GetChildren() {
-		printBook(child, indent+"  ")
+		printBook(child, indent+1)
 	}
 }
 
 func main() {
-	// Create a new book
-	book := omni.NewAtom("my_book", "book")
-	book.SetProperty(omni.NewProperty("title", "The Art of Go"))
-	book.SetProperty(omni.NewProperty("author", "Gopher"))
-
-	// Add some pages with lorem ipsum content
-	for i := 0; i < 5; i++ {
+	// Create pages with properties
+	pages := make([]omni.AtomInterface, 0, 5)
+	for i := 1; i <= 5; i++ {
 		para1 := loremIpsum[i%len(loremIpsum)]
 		para2 := loremIpsum[(i+1)%len(loremIpsum)]
-		createPage(book, i+1, para1, para2)
+		page := createPage(
+			fmt.Sprintf("page_%d", i),
+			i,
+			para1,
+			para2,
+		)
+		pages = append(pages, page)
 	}
 
+	// Create book with pages using functional options
+	book := omni.NewAtom("book",
+		omni.WithID("my_book"),
+		omni.WithChildren(pages...),
+		omni.WithProperties(
+			omni.NewProperty("title", "The Art of Go"),
+			omni.NewProperty("author", "Gopher"),
+		),
+	)
+
 	// Print the book structure
-	fmt.Println("Book Structure:")
-	printBook(book, "")
+	fmt.Println("Book structure:")
+	printBook(book, 0)
+
+	// Convert to JSON and print
+	jsonData, _ := book.ToJson()
+	fmt.Println("\nBook as JSON:")
+	fmt.Println(string(jsonData))
 
 	// Print a sample page
 	if len(book.GetChildren()) > 0 {

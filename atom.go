@@ -1,6 +1,11 @@
 package omni
 
-import "sync"
+import (
+	"encoding/json"
+	"sync"
+
+	"github.com/gouniverse/uid"
+)
 
 // Atom is a basic implementation of the AtomInterface.
 // It represents a composable primitive that can have properties and child atoms.
@@ -14,14 +19,45 @@ type Atom struct {
 
 var _ AtomInterface = (*Atom)(nil)
 
-// NewAtom creates a new Atom with the given ID and type.
-func NewAtom(id, atomType string) *Atom {
-	return &Atom{
-		id:         id,
+// AtomOption configures an Atom.
+type AtomOption func(*Atom)
+
+// WithID sets the ID of the Atom.
+func WithID(id string) AtomOption {
+	return func(a *Atom) {
+		a.id = id
+	}
+}
+
+// WithProperties adds properties to the Atom.
+func WithProperties(properties ...PropertyInterface) AtomOption {
+	return func(a *Atom) {
+		a.properties = append(a.properties, properties...)
+	}
+}
+
+// WithChildren adds child atoms to the Atom.
+func WithChildren(children ...AtomInterface) AtomOption {
+	return func(a *Atom) {
+		a.children = append(a.children, children...)
+	}
+}
+
+// NewAtom creates a new Atom with the given type and options.
+// If no ID is provided, a human-readable UID will be generated.
+func NewAtom(atomType string, opts ...AtomOption) *Atom {
+	a := &Atom{
+		id:         uid.HumanUid(),
 		atomType:   atomType,
 		properties: make([]PropertyInterface, 0),
 		children:   make([]AtomInterface, 0),
 	}
+
+	for _, opt := range opts {
+		opt(a)
+	}
+
+	return a
 }
 
 // GetID returns the unique identifier of the atom.
@@ -148,8 +184,112 @@ func (a *Atom) GetChildren() []AtomInterface {
 }
 
 // SetChildren sets all child atoms at once.
+// If children is nil or contains nil values, they will be filtered out.
 func (a *Atom) SetChildren(children []AtomInterface) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.children = children
+
+	if children == nil {
+		a.children = []AtomInterface{}
+		return
+	}
+
+	// Filter out nil children
+	a.children = make([]AtomInterface, 0, len(children))
+	for _, child := range children {
+		if child != nil {
+			a.children = append(a.children, child)
+		}
+	}
+}
+
+// AtomJsonObject represents the JSON structure of an Atom
+type AtomJsonObject struct {
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Parameters map[string]string `json:"parameters"`
+	Children   []AtomJsonObject  `json:"children"`
+}
+
+// ToMap converts the Atom to a map representation.
+func (a *Atom) ToMap() map[string]interface{} {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	childrenMap := make([]map[string]interface{}, 0, len(a.children))
+	for _, child := range a.children {
+		if child != nil {
+			childMap := map[string]interface{}{
+				"id":   child.GetID(),
+				"type": child.GetType(),
+			}
+			childrenMap = append(childrenMap, childMap)
+		}
+	}
+
+	// Convert properties to a map
+	properties := make(map[string]string, len(a.properties))
+	for _, prop := range a.properties {
+		if prop != nil {
+			properties[prop.GetName()] = prop.GetValue()
+		}
+	}
+
+	return map[string]interface{}{
+		"id":         a.id,
+		"type":       a.atomType,
+		"parameters": properties,
+		"children":   childrenMap,
+	}
+}
+
+// ToJson converts the Atom to a JSON string.
+func (a *Atom) ToJson() (string, error) {
+	jsonObject := a.toJsonObject()
+	jsonBytes, err := json.Marshal(jsonObject)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonBytes), nil
+}
+
+// ToJsonPretty converts the Atom to a nicely indented JSON string.
+func (a *Atom) ToJsonPretty() (string, error) {
+	jsonObject := a.toJsonObject()
+	jsonBytes, err := json.MarshalIndent(jsonObject, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(jsonBytes), nil
+}
+
+// toJsonObject converts the Atom to its JSON object representation.
+func (a *Atom) toJsonObject() AtomJsonObject {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	// Convert properties to a map
+	parameters := make(map[string]string, len(a.properties))
+	for _, prop := range a.properties {
+		if prop != nil {
+			parameters[prop.GetName()] = prop.GetValue()
+		}
+	}
+
+	// Convert children to JSON objects
+	children := make([]AtomJsonObject, 0, len(a.children))
+	for _, child := range a.children {
+		if child != nil {
+			if atom, ok := child.(*Atom); ok {
+				children = append(children, atom.toJsonObject())
+			}
+		}
+	}
+
+	return AtomJsonObject{
+		ID:         a.id,
+		Type:       a.atomType,
+		Parameters: parameters,
+		Children:   children,
+	}
 }
