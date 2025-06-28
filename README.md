@@ -139,9 +139,26 @@ type PropertyInterface interface {
 
 ## Installation
 
+### Using Go Modules (recommended)
+
 ```bash
+# Add to your project
 go get github.com/dracory/omni
+
+# Update to the latest version
+go get -u github.com/dracory/omni
 ```
+
+### In your Go code
+
+```go
+import "github.com/dracory/omni"
+```
+
+### Requirements
+
+- Go 1.18 or higher (for generics support)
+- No external dependencies beyond the Go standard library
 
 ## Getting Started
 
@@ -182,18 +199,53 @@ All operations on atoms are thread-safe, using mutexes to protect concurrent acc
 
 ## Advanced Usage
 
-### Serialization
+### Serialization and Deserialization
 
-Atoms can be easily serialized to various formats:
+Omni provides comprehensive serialization and deserialization capabilities for atoms:
+
+#### JSON Serialization
 
 ```go
-// To map
+// Convert atoms to JSON string
+atoms := []omni.AtomInterface{atom1, atom2}
+jsonStr, err := omni.MarshalAtomsToJson(atoms)
+if err != nil {
+    // Handle error
+}
+
+// Convert JSON string back to atoms
+atomsFromJson, err := omni.UnmarshalJsonToAtoms(jsonStr)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Map Conversion
+
+```go
+// Convert atoms to maps
+atoms := []omni.AtomInterface{atom1, atom2}
+maps := omni.ConvertAtomsToMap(atoms)
+
+// Convert maps back to atoms
+atomsFromMaps, err := omni.ConvertMapToAtoms(maps)
+if err != nil {
+    // Handle error
+}
+
+// Convert a single map to an atom
+atomMap := map[string]any{"id": "my-id", "type": "my-type"}
+atom, err := omni.ConvertMapToAtom(atomMap)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Individual Atom Serialization
+
+```go
+// Convert a single atom to a map
 m := atom.ToMap()
-
-// To JSON
-jsonStr := atom.ToJSON()
-
-prettyJSON := atom.ToJSONPretty()
 
 // Custom JSON serialization
 customJSON, _ := json.Marshal(atom.ToMap())
@@ -221,10 +273,60 @@ wg.Wait()
 // All children will be safely added
 ```
 
+## Testing
+
+Omni has a comprehensive test suite. To run the tests:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with coverage
+go test -cover ./...
+
+# Run tests with verbose output
+go test -v ./...
+```
+
+### Test Structure
+
+Tests are organized alongside the code they test:
+
+- `atom_test.go` - Tests for atom functionality
+- `property_test.go` - Tests for property functionality
+- `functions_test.go` - Tests for serialization/deserialization functions
+
+## Versioning
+
+Omni follows [Semantic Versioning](https://semver.org/):
+
+- Major version changes indicate incompatible API changes
+- Minor version changes indicate added functionality in a backward-compatible manner
+- Patch version changes indicate backward-compatible bug fixes
+
 ## Contributing
 
-Contributions are welcome! Please ensure all tests pass and add new tests for any new functionality.
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests to ensure they pass (`go test ./...`)
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+Please ensure all tests pass and add new tests for any new functionality.
 
 ## License
 
 This project is licensed under the GNU AGPLv3 - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+If you encounter any issues or have questions, please file an issue on the [GitHub repository](https://github.com/dracory/omni/issues).
+
+## Acknowledgments
+
+- Thanks to all contributors who have helped shape this project
+- Inspired by component-based design patterns and functional programming principles
