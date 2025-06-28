@@ -28,14 +28,15 @@ func NewAtom(atomType string, opts ...AtomOption) *Atom {
 }
 
 // NewAtomFromGob creates a new Atom from binary data encoded with the gob package.
+// The data should be a gob-encoded binary that was created by ToGob().
 // Returns the Atom and nil error on success, or nil and an error if the data is invalid or cannot be decoded.
 func NewAtomFromGob(data []byte) (*Atom, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty data provided")
 	}
 
-	// Create a temporary struct for decoding
-	var temp struct {
+	// Define the same struct used in ToGob
+	type gobAtom struct {
 		ID         string
 		Type       string
 		Properties map[string]string
@@ -43,15 +44,13 @@ func NewAtomFromGob(data []byte) (*Atom, error) {
 	}
 
 	// Decode the data into the temporary struct
+	var temp gobAtom
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&temp); err != nil {
 		return nil, fmt.Errorf("gob decode failed: %w", err)
 	}
 
-	// Create a new atom
+	// Create a new atom with the decoded data
 	atom := NewAtom(temp.Type, WithID(temp.ID))
-	if atom == nil {
-		return nil, errors.New("failed to create atom")
-	}
 
 	// Set properties
 	for name, value := range temp.Properties {
@@ -117,9 +116,16 @@ func NewAtomFromMap(atomMap map[string]any) (*Atom, error) {
 
 	atom := NewAtom(typeStr, WithID(id))
 
-	// Set properties
-	if params, ok := atomMap["parameters"].(map[string]any); ok {
-		for k, v := range params {
+	// Set properties - check both 'properties' and 'parameters' for backward compatibility
+	var props map[string]any
+	if p, ok := atomMap["properties"].(map[string]any); ok {
+		props = p
+	} else if p, ok := atomMap["parameters"].(map[string]any); ok {
+		props = p
+	}
+
+	if props != nil {
+		for k, v := range props {
 			if value, ok := v.(string); ok {
 				atom.SetProperty(NewProperty(k, value))
 			}

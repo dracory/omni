@@ -8,6 +8,14 @@ import (
 	"sync"
 )
 
+func init() {
+	// Register types that will be encoded/decoded with gob
+	gob.Register(map[string]interface{}{})
+	gob.Register(map[string]string{})
+	gob.Register([]interface{}{})
+	gob.Register([]map[string]interface{}{})
+}
+
 // Atom is a basic implementation of the AtomInterface.
 // It represents a composable primitive that can have properties and child atoms.
 type Atom struct {
@@ -223,22 +231,26 @@ func (a *Atom) ToJsonPretty() (string, error) {
 	return string(jsonBytes), nil
 }
 
-// ToGob encodes the Atom to a binary format using the gob package.
+// GobEncode implements the gob.GobEncoder interface.
+// It encodes the Atom to a binary format using the gob package.
 // Returns the binary data and any encoding error.
 func (a *Atom) ToGob() ([]byte, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
 	// Create a temporary struct for encoding
-	temp := struct {
+	type gobAtom struct {
 		ID         string
 		Type       string
 		Properties map[string]string
 		Children   [][]byte
-	}{
+	}
+
+	temp := gobAtom{
 		ID:         a.id,
 		Type:       a.atomType,
 		Properties: make(map[string]string),
+		Children:   make([][]byte, 0, len(a.children)),
 	}
 
 	// Convert properties to a map
