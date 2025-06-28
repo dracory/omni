@@ -69,7 +69,10 @@ func JSONToAtoms(atomsJson string) ([]AtomInterface, error) {
 	}
 
 	// Validate JSON structure before processing
-	if !isValidAtomJSON(atomsJson) {
+	if valid, err := isValidAtomJSON(atomsJson); !valid {
+		if err != nil {
+			return nil, fmt.Errorf("invalid atom JSON: %v", err)
+		}
 		return nil, errors.New("invalid atom JSON: missing required fields or malformed JSON")
 	}
 
@@ -153,27 +156,23 @@ func MapToAtom(atomMap map[string]any) (AtomInterface, error) {
 		return nil, errors.New("atom map cannot be nil")
 	}
 
+	// Validate the map structure first
+	if valid, err := isValidAtomMap(atomMap); !valid {
+		return nil, fmt.Errorf("invalid atom map: %v", err)
+	}
+
 	// Make a copy of the map to avoid modifying the original
 	atomMapCopy := make(map[string]any, len(atomMap))
 	for k, v := range atomMap {
 		atomMapCopy[k] = v
 	}
 
-	// Ensure the map has the required fields
-	if _, ok := atomMapCopy["id"].(string); !ok {
-		return nil, errors.New("atom map must contain a string 'id' field")
-	}
-
-	if _, ok := atomMapCopy["type"].(string); !ok {
-		return nil, errors.New("atom map must contain a string 'type' field")
-	}
-
-	// Ensure parameters is a map
+	// Ensure parameters is a map if not present
 	if _, ok := atomMapCopy["parameters"].(map[string]any); !ok {
 		atomMapCopy["parameters"] = make(map[string]any)
 	}
 
-	// Ensure children is a slice
+	// Ensure children is a slice if not present
 	if _, ok := atomMapCopy["children"].([]any); !ok {
 		atomMapCopy["children"] = make([]any, 0)
 	}
@@ -236,7 +235,15 @@ func MapToAtoms(atoms []map[string]any) []AtomInterface {
 			continue
 		}
 
+		// Validate the atom map first
+		if valid, _ := isValidAtomMap(atom); !valid {
+			// For backward compatibility, we ignore invalid atoms
+			// Consider changing this to return an error in a future major version
+			continue
+		}
+
 		// Ignore errors from NewAtomFromMap to maintain backward compatibility
+		// We already validated the map structure, so this should not fail
 		atomObj, _ := NewAtomFromMap(atom)
 		result = append(result, atomObj)
 	}
@@ -266,7 +273,7 @@ func AtomsToGob(atoms []AtomInterface) ([]byte, error) {
 	// Encode each atom to gob
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
-	
+
 	// First encode the number of atoms
 	if err := encoder.Encode(len(atoms)); err != nil {
 		return nil, fmt.Errorf("failed to encode atom count: %w", err)
@@ -310,8 +317,9 @@ func AtomsToGob(atoms []AtomInterface) ([]byte, error) {
 //
 // Business logic:
 // - Handles empty or nil input by returning an empty slice
+// - Validates the input data structure
 // - Decodes the count of atoms first
-// - Then decodes each atom's data and converts it to an Atom using NewAtomFromGob
+// - Then decodes each atom's data and validates it before conversion
 // - Preserves the order of atoms from the encoded data
 //
 // Parameters:
@@ -332,6 +340,11 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 	var count int
 	if err := decoder.Decode(&count); err != nil {
 		return nil, fmt.Errorf("failed to decode atom count: %w", err)
+	}
+
+	// Validate count is reasonable
+	if count < 0 {
+		return nil, fmt.Errorf("invalid atom count: %d", count)
 	}
 
 	result := make([]AtomInterface, 0, count)
@@ -355,10 +368,20 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 			return nil, fmt.Errorf("failed to decode data length for atom %d: %w", i, err)
 		}
 
+		// Validate data length is reasonable
+		if dataLen < 0 || dataLen > 10*1024*1024 { // 10MB max per atom
+			return nil, fmt.Errorf("invalid data length %d for atom %d", dataLen, i)
+		}
+
 		// Read the atom data
 		atomData := make([]byte, dataLen)
 		if _, err := io.ReadFull(buffer, atomData); err != nil {
 			return nil, fmt.Errorf("failed to read atom %d data: %w", i, err)
+		}
+
+		// Validate the atom data before creating the atom
+		if valid, err := isValidGobData(atomData); !valid {
+			return nil, fmt.Errorf("invalid gob data for atom %d: %v", i, err)
 		}
 
 		// Create the atom from the gob data
@@ -373,11 +396,70 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 	return result, nil
 }
 
+// isValidGobData validates that the given data is a valid gob-encoded atom.
+//
+// Business logic:
+// - Checks for empty or nil input
+// - Attempts to decode the data into a temporary struct
+// - Validates the presence of required fields
+// - Recursively validates child atoms
+//
+// Parameters:
+//   - data: binary data to validate
+//
+// Returns:
+//   - bool: true if the data is valid
+//   - error: description of the validation failure if invalid
+func isValidGobData(data []byte) (bool, error) {
+	if len(data) == 0 {
+		return false, errors.New("cannot validate empty data")
+	}
+
+	// Temporary struct for validation
+	var temp struct {
+		ID         string
+		Type       string
+		Properties map[string]string
+		Children   [][]byte
+	}
+
+	// Try to decode the data
+	r := bytes.NewReader(data)
+	decoder := gob.NewDecoder(r)
+	if err := decoder.Decode(&temp); err != nil {
+		return false, fmt.Errorf("invalid gob data: %w", err)
+	}
+
+	// Validate required fields
+	if temp.Type == "" {
+		return false, errors.New("missing required field: Type")
+	}
+
+	if temp.ID == "" {
+		return false, errors.New("missing required field: ID")
+	}
+
+	// Validate properties if present
+	if temp.Properties == nil {
+		return false, errors.New("properties map cannot be nil")
+	}
+
+	// Recursively validate children
+	for i, childData := range temp.Children {
+		if valid, err := isValidGobData(childData); !valid {
+			return false, fmt.Errorf("invalid child at index %d: %v", i, err)
+		}
+	}
+
+	return true, nil
+}
+
 // GobToAtom decodes an Atom from binary data encoded with the gob package.
 // This is a standalone function that creates a new Atom instance from gob-encoded data.
 //
 // Business logic:
 // - Handles empty or nil input by returning an error
+// - Validates the gob data before decoding
 // - Decodes a single atom from the gob-encoded data
 // - Validates the decoded atom
 //
@@ -390,6 +472,11 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 func GobToAtom(data []byte) (AtomInterface, error) {
 	if len(data) == 0 {
 		return nil, errors.New("cannot decode empty data")
+	}
+
+	// Validate the gob data first
+	if valid, err := isValidGobData(data); !valid {
+		return nil, fmt.Errorf("invalid gob data: %v", err)
 	}
 
 	// Create a temporary struct for decoding
@@ -435,32 +522,104 @@ func GobToAtom(data []byte) (AtomInterface, error) {
 // - for arrays, checks if it's empty or contains valid objects
 //
 // Returns:
-// - true if the JSON string is a valid Atom JSON string
-// - false otherwise
-func isValidAtomJSON(jsonString string) bool {
+// - true, nil if the JSON string is a valid Atom JSON string
+// - false, error with details if the JSON is invalid
+func isValidAtomJSON(jsonString string) (bool, error) {
 	if jsonString == "" || jsonString == "null" {
-		return false
+		return false, errors.New("JSON string cannot be empty or 'null'")
 	}
 
 	// Check basic JSON structure
-	if !((strings.HasPrefix(jsonString, "{") && strings.HasSuffix(jsonString, "}")) ||
-		(strings.HasPrefix(jsonString, "[") && strings.HasSuffix(jsonString, "]"))) {
-		return false
+	isObject := strings.HasPrefix(jsonString, "{") && strings.HasSuffix(jsonString, "}")
+	isArray := strings.HasPrefix(jsonString, "[") && strings.HasSuffix(jsonString, "]")
+
+	if !isObject && !isArray {
+		return false, errors.New("JSON must be an object or array")
 	}
 
 	// If it's an array, it's valid if it's empty or contains valid objects
-	if strings.HasPrefix(jsonString, "[") {
+	if isArray {
 		// Empty array is valid
 		if jsonString == "[]" {
-			return true
+			return true, nil
 		}
 		// For non-empty arrays, we'll validate each element during parsing
-		return true
+		return true, nil
 	}
 
 	// For single objects, check required fields
 	hasID := strings.Contains(jsonString, `"id"`)
 	hasType := strings.Contains(jsonString, `"type"`)
 
-	return hasID && hasType
+	if !hasID || !hasType {
+		missing := []string{}
+		if !hasID {
+			missing = append(missing, "id")
+		}
+		if !hasType {
+			missing = append(missing, "type")
+		}
+		return false, fmt.Errorf("missing required fields: %v", strings.Join(missing, ", "))
+	}
+
+	return true, nil
+}
+
+// isValidAtomMap validates that a map represents a valid atom structure.
+//
+// Business logic:
+// - Checks for required fields (id, type)
+// - Validates that parameters is a map if present
+// - Validates that children is a slice if present
+// - Validates that all children are valid atom maps
+//
+// Parameters:
+//   - atomMap: the map to validate
+//
+// Returns:
+//   - bool: true if the map is a valid atom structure
+//   - error: description of the validation failure if invalid
+func isValidAtomMap(atomMap map[string]any) (bool, error) {
+	if atomMap == nil {
+		return false, errors.New("atom map cannot be nil")
+	}
+
+	// Check required fields
+	id, idOk := atomMap["id"].(string)
+	if !idOk || id == "" {
+		return false, errors.New("atom map must contain a non-empty string 'id' field")
+	}
+
+	typeStr, typeOk := atomMap["type"].(string)
+	if !typeOk || typeStr == "" {
+		return false, errors.New("atom map must contain a non-empty string 'type' field")
+	}
+
+	// Validate parameters if present
+	if params, ok := atomMap["parameters"]; ok && params != nil {
+		if _, ok := params.(map[string]any); !ok {
+			return false, errors.New("atom parameters must be a map[string]any")
+		}
+	}
+
+	// Validate children if present
+	if children, ok := atomMap["children"]; ok && children != nil {
+		childrenSlice, ok := children.([]any)
+		if !ok {
+			return false, errors.New("atom children must be a slice")
+		}
+
+		for i, child := range childrenSlice {
+			childMap, ok := child.(map[string]any)
+			if !ok {
+				return false, fmt.Errorf("child at index %d is not a valid atom map", i)
+			}
+
+			if valid, err := isValidAtomMap(childMap); !valid {
+				return false, fmt.Errorf("invalid child at index %d: %v", i, err)
+			}
+		}
+	}
+
+	return true, nil
 }
