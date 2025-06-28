@@ -1,6 +1,6 @@
 # Omni Package
 
-A universal Go module providing core interfaces for composable primitives.
+A universal Go module providing core interfaces and implementations for composable primitives with a functional options pattern for clean and flexible instantiation.
 
 <img src="https://opengraph.githubassets.com/5b92c81c05d64a82c3fb4ba95739403a2d38cbad61f260a0701b3366b3d10327/dracory/omni" />
 
@@ -20,18 +20,44 @@ A `Property` is a fundamental building block that represents a single attribute-
 
 ### 2. Atom
 An `Atom` is a composable primitive that can have:
-- A unique identifier
-- A type
+- A unique identifier (auto-generated if not provided)
+- A type (required)
 - Multiple properties
 - Child atoms (enabling hierarchical structures)
 
-### 3. Thread Safety
+### 3. Functional Options Pattern
+Atoms are created using a functional options pattern for clean and flexible instantiation:
+
+```go
+// Basic creation with just type (auto-generated ID)
+atom := NewAtom("my-type")
+
+// With custom ID
+atom := NewAtom("my-type", WithID("custom-id"))
+
+// With properties
+atom := NewAtom("my-type", 
+    WithID("my-id"),
+    WithProperties([]PropertyInterface{
+        NewProperty("name", "value"),
+    }),
+)
+
+// With children
+atom := NewAtom("parent",
+    WithChildren([]AtomInterface{
+        NewAtom("child", WithID("child1")),
+        NewAtom("child", WithID("child2")),
+    }),
+)
+```
+
+### 4. Thread Safety
 All operations on atoms are thread-safe, making it safe to use in concurrent applications.
 
 ## Architecture
 
 The package follows a simple yet powerful architecture:
-
 ```
 ┌─────────────────┐     ┌─────────────────┐
 │                 │     │                 │
@@ -91,7 +117,6 @@ type AtomInterface interface {
 }
 ```
 
-
 ### PropertyInterface
 
 `PropertyInterface` defines the contract for any abstract attribute or characteristic. Any concrete property type must implement this interface.
@@ -118,7 +143,7 @@ type PropertyInterface interface {
 go get github.com/dracory/omni
 ```
 
-## Basic Usage
+## Getting Started
 
 ```go
 import "github.com/dracory/omni"
@@ -126,115 +151,75 @@ import "github.com/dracory/omni"
 // Create a new property
 prop := omni.NewProperty("color", "blue")
 
-// Create a new atom
-atom := omni.NewAtom("atom1", "button")
+
+// Create a new atom with functional options
+atom := omni.NewAtom("my-type",
+    omni.WithID("my-atom"),
+    omni.WithProperties([]omni.PropertyInterface{prop}),
+)
+
+// Or build it up
+atom := omni.NewAtom("my-type")
 atom.SetProperty(prop)
 
-// Create and add a child atom
-child := omni.NewAtom("child1", "text")
-child.SetProperty(omni.NewProperty("content", "Hello, World!"))
+// Add children
+child := omni.NewAtom("child", omni.WithID("child-1"))
 atom.AddChild(child)
-```
-
-## Advanced Usage Patterns
-
-### 1. Hierarchical Structures
-Create complex nested structures by adding child atoms:
-
-```go
-// Create a book with pages
-book := omni.NewAtom("my_book", "book")
-page1 := omni.NewAtom("page1", "page")
-book.AddChild(page1)
-```
-
-### 2. Concurrent Access
-Atoms are safe for concurrent use:
-
-```go
-var wg sync.WaitGroup
-for i := 0; i < 10; i++ {
-    wg.Add(1)
-    go func(i int) {
-        defer wg.Done()
-        prop := omni.NewProperty(fmt.Sprintf("prop_%d", i), fmt.Sprint(i))
-        atom.SetProperty(prop)
-    }(i)
-}
-wg.Wait()
-```
-
-### 3. Traversing Structures
-Easily traverse and process atom hierarchies:
-
-```go
-func processAtom(atom omni.AtomInterface, indent string) {
-    fmt.Printf("%s%s (%s)\n", indent, atom.GetID(), atom.GetType())
-    for _, child := range atom.GetChildren() {
-        processAtom(child, indent + "  ")
-    }
-}
 ```
 
 ## Examples
 
-The package includes several examples demonstrating different usage patterns:
+Check out the `examples` directory for complete working examples:
 
-### 1. Basic Example
-Demonstrates core functionality with properties and simple atom hierarchies.
+1. `basic/` - Basic usage of atoms and properties
+2. `book/` - A more complex example modeling a book with chapters
+3. `advanced/` - Concurrent operations and advanced patterns
+4. `website/` - A website structure with pages and components
 
-```bash
-cd examples/basic
-go run basic_example.go
+## Thread Safety
+
+All operations on atoms are thread-safe, using mutexes to protect concurrent access. The implementation is designed for high concurrency with minimal lock contention.
+
+## Advanced Usage
+
+### Serialization
+
+Atoms can be easily serialized to various formats:
+
+```go
+// To map
+m := atom.ToMap()
+
+// To JSON
+jsonStr := atom.ToJSON()
+
+prettyJSON := atom.ToJSONPretty()
+
+// Custom JSON serialization
+customJSON, _ := json.Marshal(atom.ToMap())
 ```
 
-### 2. Advanced Example
-Shows concurrent usage patterns and thread safety.
+### Concurrency Patterns
 
-```bash
-cd examples/advanced
-go run concurrent_example.go
+The implementation is safe for concurrent use. Here's an example of concurrent operations:
+
+```go
+var wg sync.WaitGroup
+parent := NewAtom("parent")
+
+// Start multiple goroutines adding children
+for i := 0; i < 10; i++ {
+    wg.Add(1)
+    go func(i int) {
+        defer wg.Done()
+        child := NewAtom("child", WithID(fmt.Sprintf("child-%d", i)))
+        parent.AddChild(child)
+    }(i)
+}
+
+wg.Wait()
+// All children will be safely added
 ```
-
-### 3. Book Example
-Illustrates creating a hierarchical book structure with pages and content.
-
-```bash
-cd examples/book
-go run book_example.go
-```
-
-### 4. Website Example
-Demonstrates building a simple website structure with pages, headers, and paragraphs.
-
-```bash
-cd examples/website
-# Show website structure
-go run website_example.go
-# Show specific page
-go run website_example.go --page=home
-go run website_example.go --page=about
-```
-
-## Best Practices
-
-1. **Naming Conventions**:
-   - Use lowercase with underscores for property names (e.g., `user_name`)
-   - Keep atom types simple and descriptive (e.g., `button`, `user_profile`)
-
-2. **Concurrency**:
-   - The package handles concurrent access, but be mindful of deadlocks in your application logic
-   - Use read locks for operations that only read atom state
-
-3. **Memory Management**:
-   - Large hierarchies should be managed carefully to avoid memory leaks
-   - Consider implementing cleanup logic for long-running applications
-
-## Performance Considerations
-
-- Property lookups are O(n) where n is the number of properties
-- Child atom lookups are O(n) where n is the number of children
-- For high-performance scenarios, consider caching frequently accessed properties or children
 
 ## Contributing
 
@@ -242,5 +227,4 @@ Contributions are welcome! Please ensure all tests pass and add new tests for an
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0.
-See the [LICENSE](LICENSE) file for the full license text.
+This project is licensed under the GNU AGPLv3 - see the [LICENSE](LICENSE) file for details.
