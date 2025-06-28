@@ -143,7 +143,7 @@ func AtomsToMap(atoms []AtomInterface) []map[string]any {
 // MapToAtom converts a map to an AtomInterface.
 //
 // The map must represent a valid atom with at least "id" and "type" fields.
-// Properties should be in a "parameters" map, and children in a "children" slice.
+// Properties should be in a "properties" map, and children in a "children" slice.
 //
 // Parameters:
 //   - atomMap: map containing the atom data
@@ -167,9 +167,11 @@ func MapToAtom(atomMap map[string]any) (AtomInterface, error) {
 		atomMapCopy[k] = v
 	}
 
-	// Ensure parameters is a map if not present
-	if _, ok := atomMapCopy["parameters"].(map[string]any); !ok {
-		atomMapCopy["parameters"] = make(map[string]any)
+	// Ensure properties is a map if not present
+	props, ok := atomMapCopy["properties"].(map[string]any)
+	if !ok {
+		props = make(map[string]any)
+		atomMapCopy["properties"] = props
 	}
 
 	// Ensure children is a slice if not present
@@ -181,12 +183,10 @@ func MapToAtom(atomMap map[string]any) (AtomInterface, error) {
 	atomType, _ := atomMapCopy["type"].(string)
 	atom := NewAtom(atomType, WithID(atomMapCopy["id"].(string)))
 
-	// Set properties if they exist
-	if params, ok := atomMapCopy["parameters"].(map[string]any); ok {
-		for key, value := range params {
-			if strVal, ok := value.(string); ok {
-				atom.SetProperty(NewProperty(key, strVal))
-			}
+	// Set properties
+	for key, value := range props {
+		if strVal, ok := value.(string); ok {
+			atom.SetProperty(NewProperty(key, strVal))
 		}
 	}
 
@@ -569,7 +569,7 @@ func isValidAtomJSON(jsonString string) (bool, error) {
 //
 // Business logic:
 // - Checks for required fields (id, type)
-// - Validates that parameters is a map if present
+// - Validates that properties is a map if present
 // - Validates that children is a slice if present
 // - Validates that all children are valid atom maps
 //
@@ -595,10 +595,10 @@ func isValidAtomMap(atomMap map[string]any) (bool, error) {
 		return false, errors.New("atom map must contain a non-empty string 'type' field")
 	}
 
-	// Validate parameters if present
-	if params, ok := atomMap["parameters"]; ok && params != nil {
-		if _, ok := params.(map[string]any); !ok {
-			return false, errors.New("atom parameters must be a map[string]any")
+	// Validate properties if present
+	if props, ok := atomMap["properties"]; ok && props != nil {
+		if _, ok := props.(map[string]any); !ok {
+			return false, errors.New("atom properties must be a map[string]any")
 		}
 	}
 

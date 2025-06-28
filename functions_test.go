@@ -55,7 +55,7 @@ func TestAtomsToJSON(t *testing.T) {
 
 func TestJSONToAtoms(t *testing.T) {
 	// Test with valid JSON array
-	jsonStr := `[{"id":"id1","type":"type1","parameters":{"key1":"value1"},"children":[]}]`
+	jsonStr := `[{"id":"id1","type":"type1","properties":{"key1":"value1"},"children":[]}]`
 
 	atoms, err := omni.JSONToAtoms(jsonStr)
 	if err != nil {
@@ -151,8 +151,8 @@ func TestAtomsToMap(t *testing.T) {
 	if typ, ok := maps[0]["type"].(string); !ok || typ != "type1" {
 		t.Errorf("maps[0][\"type\"] = %v, want %v", typ, "type1")
 	}
-	if params, ok := maps[0]["parameters"].(map[string]string); !ok || params["key1"] != "value1" {
-		t.Errorf("maps[0][\"parameters\"] missing key1=value1")
+	if params, ok := maps[0]["properties"].(map[string]string); !ok || params["key1"] != "value1" {
+		t.Errorf("maps[0][\"properties\"] missing key1=value1")
 	}
 
 	// Verify second atom's children
@@ -318,7 +318,7 @@ func TestMapToAtom(t *testing.T) {
 	atomMap := map[string]any{
 		"id":   "testId",
 		"type": "testType",
-		"parameters": map[string]any{
+		"properties": map[string]any{
 			"key1": "value1",
 		},
 		"children": []any{

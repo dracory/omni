@@ -175,7 +175,7 @@ func (a *Atom) SetChildren(children []AtomInterface) {
 type AtomJsonObject struct {
 	ID         string            `json:"id"`
 	Type       string            `json:"type"`
-	Parameters map[string]string `json:"parameters"`
+	Properties map[string]string `json:"properties"`
 	Children   []AtomJsonObject  `json:"children"`
 }
 
@@ -206,7 +206,7 @@ func (a *Atom) ToMap() map[string]interface{} {
 	return map[string]interface{}{
 		"id":         a.id,
 		"type":       a.atomType,
-		"parameters": properties,
+		"properties": properties,
 		"children":   childrenMap,
 	}
 }
@@ -283,10 +283,10 @@ func (a *Atom) toJsonObject() AtomJsonObject {
 	defer a.mu.RUnlock()
 
 	// Convert properties to a map
-	parameters := make(map[string]string, len(a.properties))
+	properties := make(map[string]string, len(a.properties))
 	for _, prop := range a.properties {
 		if prop != nil {
-			parameters[prop.GetName()] = prop.GetValue()
+			properties[prop.GetName()] = prop.GetValue()
 		}
 	}
 
@@ -303,7 +303,7 @@ func (a *Atom) toJsonObject() AtomJsonObject {
 	return AtomJsonObject{
 		ID:         a.id,
 		Type:       a.atomType,
-		Parameters: parameters,
+		Properties: properties,
 		Children:   children,
 	}
 }

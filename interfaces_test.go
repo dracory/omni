@@ -148,7 +148,7 @@ func TestAtomInterface(t *testing.T) {
 			t.Errorf("Children in map do not match expected. Got: %+v", children)
 		}
 
-		props, ok := m["parameters"].(map[string]string)
+		props, ok := m["properties"].(map[string]string)
 		if !ok || props["test-prop"] != "test-value" {
 			t.Error("Properties in map do not match expected")
 		}
