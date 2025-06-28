@@ -60,6 +60,42 @@ func NewAtom(atomType string, opts ...AtomOption) *Atom {
 	return a
 }
 
+// NewAtomFromMap creates a new Atom from a map representation.
+// The map must contain at least "id" and "type" fields.
+// Properties should be in a "parameters" map, and children in a "children" slice.
+func NewAtomFromMap(atomMap map[string]any) *Atom {
+	if atomMap == nil {
+		return nil
+	}
+
+	id, _ := atomMap["id"].(string)
+	typeStr, _ := atomMap["type"].(string)
+
+	atom := NewAtom(typeStr, WithID(id))
+
+	// Set properties
+	if params, ok := atomMap["parameters"].(map[string]any); ok {
+		for k, v := range params {
+			if value, ok := v.(string); ok {
+				atom.SetProperty(NewProperty(k, value))
+			}
+		}
+	}
+
+	// Handle children
+	if children, ok := atomMap["children"].([]any); ok {
+		for _, child := range children {
+			if childMap, ok := child.(map[string]any); ok {
+				if childAtom := NewAtomFromMap(childMap); childAtom != nil {
+					atom.AddChild(childAtom)
+				}
+			}
+		}
+	}
+
+	return atom
+}
+
 // GetID returns the unique identifier of the atom.
 func (a *Atom) GetID() string {
 	return a.id
