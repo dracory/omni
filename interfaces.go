@@ -40,6 +40,10 @@ type AtomInterface interface {
 	ToJson() (string, error)
 	ToJsonPretty() (string, error)
 
+	// ToGob encodes the atom to a binary format using the gob package.
+	// Returns the binary data and any encoding error.
+	ToGob() ([]byte, error)
+
 	// toJsonObject is an internal method for JSON serialization
 	toJsonObject() AtomJsonObject
 }

@@ -1,6 +1,8 @@
 package omni
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,6 +78,7 @@ func UnmarshalJsonToAtoms(atomsJson string) ([]AtomInterface, error) {
 // ConvertMapToAtoms converts a slice of atom maps to a slice of AtomInterface.
 // This is a convenience function that calls NewAtomFromMap on each element.
 // Nil maps in the input will result in nil elements in the output.
+// Errors from NewAtomFromMap are ignored, and nil is appended to the result in case of errors.
 func ConvertMapToAtoms(atoms []map[string]any) []AtomInterface {
 	if atoms == nil {
 		return nil
@@ -89,11 +92,9 @@ func ConvertMapToAtoms(atoms []map[string]any) []AtomInterface {
 			continue
 		}
 
-		if atomObj := NewAtomFromMap(atom); atomObj != nil {
-			result = append(result, atomObj)
-		} else {
-			result = append(result, nil)
-		}
+		// Ignore errors from NewAtomFromMap to maintain backward compatibility
+		atomObj, _ := NewAtomFromMap(atom)
+		result = append(result, atomObj)
 	}
 
 	return result
@@ -138,35 +139,38 @@ func ConvertMapToAtom(atomMap map[string]any) (AtomInterface, error) {
 		return nil, errors.New("atom map cannot be nil")
 	}
 
-	// Check required fields
-	if _, ok := atomMap["id"]; !ok {
-		return nil, errors.New("atom map is missing required field 'id'")
-	}
-
-	if _, ok := atomMap["type"]; !ok {
-		return nil, errors.New("atom map is missing required field 'type'")
-	}
-
-	// Create a deep copy to avoid modifying the input
+	// Make a copy of the map to avoid modifying the original
 	atomMapCopy := make(map[string]any, len(atomMap))
 	for k, v := range atomMap {
 		atomMapCopy[k] = v
 	}
 
-	// Process children if they exist
-	if children, ok := atomMapCopy["children"].([]any); ok {
-		processedChildren := make([]any, 0, len(children))
-		for _, child := range children {
-			if childMap, ok := child.(map[string]any); ok {
-				if childMap != nil {
-					processedChildren = append(processedChildren, childMap)
-				}
-			}
-		}
-		atomMapCopy["children"] = processedChildren
+	// Ensure the map has the required fields
+	if _, ok := atomMapCopy["id"].(string); !ok {
+		return nil, errors.New("atom map must contain a string 'id' field")
 	}
 
-	return NewAtomFromMap(atomMapCopy), nil
+	if _, ok := atomMapCopy["type"].(string); !ok {
+		return nil, errors.New("atom map must contain a string 'type' field")
+	}
+
+	// Ensure parameters is a map
+	if _, ok := atomMapCopy["parameters"].(map[string]any); !ok {
+		atomMapCopy["parameters"] = make(map[string]any)
+	}
+
+	// Ensure children is a slice
+	if _, ok := atomMapCopy["children"].([]any); !ok {
+		atomMapCopy["children"] = make([]any, 0)
+	}
+
+	// Create the atom from the map copy
+	atom, err := NewAtomFromMap(atomMapCopy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create atom from map: %w", err)
+	}
+
+	return atom, nil
 }
 
 // mapToAtomMap is an internal function that validates and normalizes an atom map.
@@ -178,59 +182,44 @@ func ConvertMapToAtom(atomMap map[string]any) (AtomInterface, error) {
 // Returns:
 //   - map[string]any: the normalized atom map
 //   - error: if the map is not a valid atom
-func mapToAtomMap(atomMap map[string]any) (map[string]any, error) {
-	if atomMap == nil {
-		return nil, errors.New("atom map cannot be nil")
+//
+// FromGob decodes an Atom from binary data encoded with the gob package.
+// This is a standalone function since it needs to create a new Atom instance.
+func FromGob(data []byte) (AtomInterface, error) {
+	if len(data) == 0 {
+		return nil, errors.New("cannot decode empty data")
 	}
 
-	// Check required fields
-	id, ok := atomMap["id"].(string)
-	if !ok || id == "" {
-		return nil, errors.New("atom map must have a non-empty string 'id' field")
+	// Create a temporary struct for decoding
+	var temp struct {
+		ID         string
+		Type       string
+		Properties map[string]string
+		Children   [][]byte
 	}
 
-	typeStr, ok := atomMap["type"].(string)
-	if !ok || typeStr == "" {
-		return nil, errors.New("atom map must have a non-empty string 'type' field")
+	// Decode the data into the temporary struct
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(&temp); err != nil {
+		return nil, fmt.Errorf("gob decode failed: %w", err)
 	}
 
-	// Process parameters
-	params := make(map[string]string)
-	if paramsAny, ok := atomMap["parameters"]; ok {
-		if paramsMap, ok := paramsAny.(map[string]any); ok {
-			for k, v := range paramsMap {
-				if strVal, ok := v.(string); ok {
-					params[k] = strVal
-				} else {
-					// Convert non-string values to string
-					params[k] = fmt.Sprintf("%v", v)
-				}
-			}
+	// Create a new atom
+	atom := NewAtom(temp.Type, WithID(temp.ID))
+
+	// Convert properties
+	for name, value := range temp.Properties {
+		atom.SetProperty(NewProperty(name, value))
+	}
+
+	// Recursively decode children
+	for _, childData := range temp.Children {
+		child, err := FromGob(childData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode child: %w", err)
 		}
+		atom.AddChild(child)
 	}
 
-	// Process children
-	var children []map[string]any
-	if childrenAny, ok := atomMap["children"]; ok {
-		if childrenSlice, ok := childrenAny.([]any); ok {
-			children = make([]map[string]any, 0, len(childrenSlice))
-			for _, childAny := range childrenSlice {
-				if childMap, ok := childAny.(map[string]any); ok && childMap != nil {
-					// Recursively process child atoms
-					if child, err := mapToAtomMap(childMap); err == nil {
-						children = append(children, child)
-					}
-				}
-			}
-		}
-	}
-
-	// Create a new map with normalized structure
-	result := make(map[string]any)
-	result["id"] = id
-	result["type"] = typeStr
-	result["parameters"] = params
-	result["children"] = children
-
-	return result, nil
+	return atom, nil
 }

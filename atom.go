@@ -1,10 +1,11 @@
 package omni
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"sync"
-
-	"github.com/gouniverse/uid"
 )
 
 // Atom is a basic implementation of the AtomInterface.
@@ -18,83 +19,6 @@ type Atom struct {
 }
 
 var _ AtomInterface = (*Atom)(nil)
-
-// AtomOption configures an Atom.
-type AtomOption func(*Atom)
-
-// WithID sets the ID of the Atom.
-func WithID(id string) AtomOption {
-	return func(a *Atom) {
-		a.id = id
-	}
-}
-
-// WithProperties adds properties to the Atom.
-func WithProperties(properties ...PropertyInterface) AtomOption {
-	return func(a *Atom) {
-		a.properties = append(a.properties, properties...)
-	}
-}
-
-// WithChildren adds child atoms to the Atom.
-func WithChildren(children ...AtomInterface) AtomOption {
-	return func(a *Atom) {
-		a.children = append(a.children, children...)
-	}
-}
-
-// NewAtom creates a new Atom with the given type and options.
-// If no ID is provided, a human-readable UID will be generated.
-func NewAtom(atomType string, opts ...AtomOption) *Atom {
-	a := &Atom{
-		id:         uid.HumanUid(),
-		atomType:   atomType,
-		properties: make([]PropertyInterface, 0),
-		children:   make([]AtomInterface, 0),
-	}
-
-	for _, opt := range opts {
-		opt(a)
-	}
-
-	return a
-}
-
-// NewAtomFromMap creates a new Atom from a map representation.
-// The map must contain at least "id" and "type" fields.
-// Properties should be in a "parameters" map, and children in a "children" slice.
-func NewAtomFromMap(atomMap map[string]any) *Atom {
-	if atomMap == nil {
-		return nil
-	}
-
-	id, _ := atomMap["id"].(string)
-	typeStr, _ := atomMap["type"].(string)
-
-	atom := NewAtom(typeStr, WithID(id))
-
-	// Set properties
-	if params, ok := atomMap["parameters"].(map[string]any); ok {
-		for k, v := range params {
-			if value, ok := v.(string); ok {
-				atom.SetProperty(NewProperty(k, value))
-			}
-		}
-	}
-
-	// Handle children
-	if children, ok := atomMap["children"].([]any); ok {
-		for _, child := range children {
-			if childMap, ok := child.(map[string]any); ok {
-				if childAtom := NewAtomFromMap(childMap); childAtom != nil {
-					atom.AddChild(childAtom)
-				}
-			}
-		}
-	}
-
-	return atom
-}
 
 // GetID returns the unique identifier of the atom.
 func (a *Atom) GetID() string {
@@ -297,6 +221,48 @@ func (a *Atom) ToJsonPretty() (string, error) {
 		return "", err
 	}
 	return string(jsonBytes), nil
+}
+
+// ToGob encodes the Atom to a binary format using the gob package.
+// Returns the binary data and any encoding error.
+func (a *Atom) ToGob() ([]byte, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	// Create a temporary struct for encoding
+	temp := struct {
+		ID         string
+		Type       string
+		Properties map[string]string
+		Children   [][]byte
+	}{
+		ID:         a.id,
+		Type:       a.atomType,
+		Properties: make(map[string]string),
+	}
+
+	// Convert properties to a map
+	for _, prop := range a.properties {
+		temp.Properties[prop.GetName()] = prop.GetValue()
+	}
+
+	// Recursively encode children
+	for _, child := range a.children {
+		childData, err := child.ToGob()
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode child: %w", err)
+		}
+		temp.Children = append(temp.Children, childData)
+	}
+
+	// Encode the temporary struct
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(temp); err != nil {
+		return nil, fmt.Errorf("gob encode failed: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // toJsonObject converts the Atom to its JSON object representation.
