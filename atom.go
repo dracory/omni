@@ -360,9 +360,11 @@ func (a *Atom) ToJSONPretty() (string, error) {
 	return string(jsonData), nil
 }
 
-// Size returns the approximate memory usage of the atom in bytes.
+// MemoryUsage returns the estimated memory usage of the atom in bytes,
+// including all its properties and recursively all its children.
+// This is useful for memory profiling and monitoring.
 // Note: This is an approximation and doesn't account for all memory used by the Go runtime.
-func (a *Atom) Size() int {
+func (a *Atom) MemoryUsage() int {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

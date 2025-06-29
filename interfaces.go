@@ -37,6 +37,8 @@ type AtomInterface interface {
 	ToJSONPretty() (string, error)
 	ToGob() ([]byte, error)
 
-	// Memory management
-	Size() int
+	// MemoryUsage returns the estimated memory usage of the atom in bytes,
+	// including all its properties and recursively all its children.
+	// This is useful for memory profiling and monitoring.
+	MemoryUsage() int
 }
