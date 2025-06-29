@@ -22,23 +22,21 @@ func TestCreatePage(t *testing.T) {
 	}
 
 	// Test page properties
-	numberProp := page.GetProperty("number")
-	if numberProp == nil || numberProp.GetValue() != "1" {
+	props := page.GetAll()
+	if number, exists := props["number"]; !exists || number != "1" {
 		t.Error("Expected number property to be '1'")
 	}
 
-	content1Prop := page.GetProperty("content_1")
-	if content1Prop == nil || content1Prop.GetValue() != "Content 1" {
+	if content1, exists := props["content_1"]; !exists || content1 != "Content 1" {
 		t.Error("Expected content_1 property to be 'Content 1'")
 	}
 
-	content2Prop := page.GetProperty("content_2")
-	if content2Prop == nil || content2Prop.GetValue() != "Content 2" {
+	if content2, exists := props["content_2"]; !exists || content2 != "Content 2" {
 		t.Error("Expected content_2 property to be 'Content 2'")
 	}
 
 	// Test that page has no children by default
-	if len(page.GetChildren()) != 0 {
+	if len(page.ChildrenGet()) != 0 {
 		t.Error("Expected page to have no children by default")
 	}
 }
@@ -48,17 +46,17 @@ func TestPrintBook(t *testing.T) {
 	// Create a test book structure
 	book := omni.NewAtom("book",
 		omni.WithID("test_book"),
-		omni.WithProperties(
-			omni.NewProperty("title", "Test Book"),
-			omni.NewProperty("author", "Test Author"),
-		),
+		omni.WithProperties(map[string]string{
+			"title":  "Test Book",
+			"author": "Test Author",
+		}),
 	)
 
 	// Add some pages
 	for i := 0; i < 3; i++ {
 		pageID := "page_" + strconv.Itoa(i+1)
 		page := createPage(pageID, i+1, "Content A", "Content B")
-		book.AddChild(page)
+		book = book.ChildAdd(page).(*omni.Atom)
 	}
 
 	// Test the book structure
@@ -67,7 +65,7 @@ func TestPrintBook(t *testing.T) {
 	}
 
 	// Test page count
-	pages := book.GetChildren()
+	pages := book.ChildrenGet()
 	if len(pages) != 3 {
 		t.Fatalf("Expected 3 pages, got %d", len(pages))
 	}
@@ -79,10 +77,10 @@ func TestPrintBook(t *testing.T) {
 			t.Errorf("Expected page %d ID to be '%s', got '%s'", i+1, expectedID, page.GetID())
 		}
 
-		numberProp := page.GetProperty("number")
+		pageProps := page.GetAll()
 		expectedNumber := strconv.Itoa(i + 1)
-		if numberProp == nil || numberProp.GetValue() != expectedNumber {
-			t.Errorf("Expected page %d number to be '%s', got '%s'", i+1, expectedNumber, numberProp.GetValue())
+		if number, exists := pageProps["number"]; !exists || number != expectedNumber {
+			t.Errorf("Expected page %d number to be '%s', got '%s'", i+1, expectedNumber, number)
 		}
 	}
 }

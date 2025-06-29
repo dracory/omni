@@ -1,49 +1,42 @@
 package omni
 
-// PropertyInterface defines the contract for any abstract attribute or characteristic.
-// Any concrete property type must implement this interface.
-type PropertyInterface interface {
-	GetName() string
-	SetName(name string)
-	GetValue() string
-	SetValue(value string)
-}
-
 // AtomInterface is the universal interface that all composable primitives must satisfy.
 // It defines the methods necessary for the system to understand and process any atom,
 // regardless of its specific type.
 type AtomInterface interface {
-	// ID
+	// ID returns the unique identifier of the atom
 	GetID() string
-	SetID(id string)
+	SetID(id string) AtomInterface
 
-	// Type
+	// Type returns the type of the atom
 	GetType() string
-	SetType(atomType string)
+	SetType(atomType string) AtomInterface
 
-	// Properties
-	GetProperties() []PropertyInterface
-	SetProperties(properties []PropertyInterface)
+	// Property access
+	Get(key string) string
+	Has(key string) bool
+	Remove(key string) AtomInterface
+	Set(key, value string) AtomInterface
 
-	GetProperty(name string) PropertyInterface
-	RemoveProperty(name string)
-	SetProperty(property PropertyInterface)
+	GetAll() map[string]string
+	SetAll(properties map[string]string) AtomInterface
 
-	// Children
-	AddChild(a AtomInterface)
-	AddChildren(children []AtomInterface)
-	GetChildren() []AtomInterface
-	SetChildren(children []AtomInterface)
+	// Children management
+	ChildAdd(child AtomInterface) AtomInterface
+	ChildDeleteByID(id string) AtomInterface
+
+	ChildrenAdd(children []AtomInterface) AtomInterface
+	ChildrenGet() []AtomInterface
+	ChildrenSet(children []AtomInterface) AtomInterface
+
+	ChildrenLength() int
 
 	// Serialization
 	ToMap() map[string]any
-	ToJson() (string, error)
-	ToJsonPretty() (string, error)
-
-	// ToGob encodes the atom to a binary format using the gob package.
-	// Returns the binary data and any encoding error.
+	ToJSON() (string, error)
+	ToJSONPretty() (string, error)
 	ToGob() ([]byte, error)
 
-	// toJsonObject is an internal method for JSON serialization
-	toJsonObject() AtomJsonObject
+	// Memory management
+	Size() int
 }

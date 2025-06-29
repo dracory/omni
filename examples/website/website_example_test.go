@@ -12,16 +12,16 @@ func TestCreatePage(t *testing.T) {
 	// Create a test site
 	site := omni.NewAtom("website",
 		omni.WithID("test_site"),
-		omni.WithProperties(
-			omni.NewProperty("title", "Test Website"),
-		),
+		omni.WithProperties(map[string]string{
+			"title": "Test Website",
+		}),
 	)
 
 	// Create a test page
 	createPage(site, "home", "/", "Home", "Welcome", "This is the home page")
 
 	// Verify the page was added correctly
-	pages := site.GetChildren()
+	pages := site.ChildrenGet()
 	if len(pages) != 1 {
 		t.Fatalf("Expected 1 page, got %d", len(pages))
 	}
@@ -32,20 +32,19 @@ func TestCreatePage(t *testing.T) {
 	}
 
 	// Verify page properties
-	titleProp := page.GetProperty("title")
-	if titleProp == nil || titleProp.GetValue() != "Home" {
+	props := page.GetAll()
+	if title, exists := props["title"]; !exists || title != "Home" {
 		t.Error("Expected page title to be 'Home'")
 	}
 
-	uriProp := page.GetProperty("uri")
-	if uriProp == nil || uriProp.GetValue() != "/" {
+	if uri, exists := props["uri"]; !exists || uri != "/" {
 		t.Error("Expected page URI to be '/'")
 	}
 
 	// Verify page children (header and paragraph)
-	children := page.GetChildren()
+	children := page.ChildrenGet()
 	if len(children) != 2 {
-		t.Fatalf("Expected 2 children, got %d", len(children)) 
+		t.Fatalf("Expected 2 children, got %d", len(children))
 	}
 
 	header := children[0]
@@ -84,10 +83,10 @@ func TestFindPageByURI(t *testing.T) {
 			continue
 		}
 
-		titleProp := page.GetProperty("title")
-		if titleProp == nil || titleProp.GetValue() != tt.title {
-			t.Errorf("Expected title '%s' for URI '%s', got '%v'", 
-				tt.title, tt.uri, titleProp)
+		title := page.Get("title")
+		if title != tt.title {
+			t.Errorf("Expected title '%s' for URI '%s', got '%s'", 
+				tt.title, tt.uri, title)
 		}
 	}
 
@@ -116,9 +115,9 @@ func TestListPages(t *testing.T) {
 	// Verify page titles
 	expectedTitles := map[string]bool{"Home": true, "About": true}
 	for _, page := range pages {
-		titleProp := page.GetProperty("title")
-		if titleProp == nil || !expectedTitles[titleProp.GetValue()] {
-			t.Errorf("Unexpected page title: %v", titleProp)
+		title := page.Get("title")
+		if !expectedTitles[title] {
+			t.Errorf("Unexpected page title: %v", title)
 		}
 	}
 }
@@ -126,29 +125,14 @@ func TestListPages(t *testing.T) {
 // TestRenderPage tests the renderPage function
 func TestRenderPage(t *testing.T) {
 	// Create a test page
-	page := omni.NewAtom("page",
-		omni.WithID("test_page"),
-		omni.WithProperties(
-			omni.NewProperty("title", "Test Page"),
-		),
-	)
+	site := omni.NewAtom("website")
+	createPage(site, "test", "/test", "Test Page", "Test Header", "Test paragraph content")
 
-	// Add header and paragraph
-	header := omni.NewAtom("header",
-		omni.WithID("test_header"),
-		omni.WithProperties(
-			omni.NewProperty("text", "Test Header"),
-		),
-	)
-	page.AddChild(header)
-
-	paragraph := omni.NewAtom("paragraph",
-		omni.WithID("test_paragraph"),
-		omni.WithProperties(
-			omni.NewProperty("content", "Test content"),
-		),
-	)
-	page.AddChild(paragraph)
+	// Get the test page
+	page := findPageByURI(site, "/test")
+	if page == nil {
+		t.Fatal("Failed to find test page")
+	}
 
 	// Render the page
 	html := renderPage(page)
@@ -158,8 +142,8 @@ func TestRenderPage(t *testing.T) {
 		t.Error("Expected HTML to contain header")
 	}
 
-	if !strings.Contains(html, "<p>Test content</p>") {
-		t.Error("Expected HTML to contain paragraph")
+	if !strings.Contains(html, "<p>Test paragraph content</p>") {
+		t.Error("Expected HTML to contain paragraph content")
 	}
 
 	if !strings.Contains(html, "<title>Test Page</title>") {

@@ -63,22 +63,22 @@ func TestNewAtom_WithCustomID(t *testing.T) {
 }
 
 func TestNewAtom_WithProperties(t *testing.T) {
-	prop1 := omni.NewProperty("key1", "value1")
-	prop2 := omni.NewProperty("key2", "value2")
-
 	atom := omni.NewAtom("testType",
-		omni.WithProperties(prop1, prop2),
+		omni.WithProperties(map[string]string{
+			"key1": "value1",
+			"key2": "value2",
+		}),
 	)
 	assertNotNil(t, "atom", atom)
-	
+
 	// Get properties and verify values
-	prop1Val := atom.GetProperty("key1")
+	prop1Val := atom.Get("key1")
 	assertNotNil(t, "property key1", prop1Val)
-	assertEqual(t, "property key1 value", "value1", prop1Val.GetValue())
-	
-	prop2Val := atom.GetProperty("key2")
+	assertEqual(t, "property key1 value", "value1", prop1Val)
+
+	prop2Val := atom.Get("key2")
 	assertNotNil(t, "property key2", prop2Val)
-	assertEqual(t, "property key2 value", "value2", prop2Val.GetValue())
+	assertEqual(t, "property key2 value", "value2", prop2Val)
 }
 
 func TestNewAtom_WithChildren(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNewAtom_WithChildren(t *testing.T) {
 		omni.WithChildren(child1, child2),
 	)
 	assertNotNil(t, "atom", atom)
-	children := atom.GetChildren()
+	children := atom.ChildrenGet()
 	if len(children) != 2 {
 		t.Fatalf("Expected 2 children, got %d", len(children))
 	}
@@ -119,16 +119,16 @@ func TestNewAtomFromMap_WithPropertiesAndChildren(t *testing.T) {
 
 	assertEqual(t, "atom ID", "test-id", atom.GetID())
 	assertEqual(t, "atom type", "testType", atom.GetType())
-	
-	prop1 := atom.GetProperty("key1")
-	assertNotNil(t, "property key1", prop1)
-	assertEqual(t, "property key1 value", "value1", prop1.GetValue())
-	
-	prop2 := atom.GetProperty("key2")
-	assertNotNil(t, "property key2", prop2)
-	assertEqual(t, "property key2 value", "value2", prop2.GetValue())
 
-	children := atom.GetChildren()
+	prop1 := atom.Get("key1")
+	assertNotNil(t, "property key1", prop1)
+	assertEqual(t, "property key1 value", "value1", prop1)
+
+	prop2 := atom.Get("key2")
+	assertNotNil(t, "property key2", prop2)
+	assertEqual(t, "property key2 value", "value2", prop2)
+
+	children := atom.ChildrenGet()
 	if len(children) != 1 {
 		t.Fatalf("Expected 1 child, got %d", len(children))
 	}
@@ -185,12 +185,12 @@ func TestNewAtomFromJSON_WithValidJSON(t *testing.T) {
 
 	assertEqual(t, "atom ID", "test-id", atom.GetID())
 	assertEqual(t, "atom type", "testType", atom.GetType())
-	
-	prop1 := atom.GetProperty("key1")
-	assertNotNil(t, "property key1", prop1)
-	assertEqual(t, "property key1 value", "value1", prop1.GetValue())
 
-	children := atom.GetChildren()
+	prop1 := atom.Get("key1")
+	assertNotNil(t, "property key1", prop1)
+	assertEqual(t, "property key1 value", "value1", prop1)
+
+	children := atom.ChildrenGet()
 	if len(children) != 1 {
 		t.Fatalf("Expected 1 child, got %d", len(children))
 	}
@@ -219,15 +219,19 @@ func TestNewAtomFromGob_WithValidData(t *testing.T) {
 	// Create a parent atom with properties and a child
 	child := omni.NewAtom("testChild",
 		omni.WithProperties(
-			omni.NewProperty("name", "Test Child"),
-			omni.NewProperty("value", "42"),
+			map[string]string{
+				"name":  "Test Child",
+				"value": "42",
+			},
 		),
 	)
 
 	parent := omni.NewAtom("testParent",
 		omni.WithProperties(
-			omni.NewProperty("name", "Test Parent"),
-			omni.NewProperty("active", "true"),
+			map[string]string{
+				"name":   "Test Parent",
+				"active": "true",
+			},
 		),
 		omni.WithChildren(child),
 	)
@@ -259,24 +263,24 @@ func TestNewAtomFromGob_WithValidData(t *testing.T) {
 	}
 
 	// Verify properties
-	nameProp := deserialized.GetProperty("name")
-	if nameProp == nil {
+	nameProp := deserialized.Get("name")
+	if nameProp == "" {
 		t.Fatal("Expected name property to be created, got nil")
 	}
-	if nameProp.GetValue() != "Test Parent" {
-		t.Errorf("Expected name property value 'Test Parent', got '%s'", nameProp.GetValue())
+	if nameProp != "Test Parent" {
+		t.Errorf("Expected name property value 'Test Parent', got '%s'", nameProp)
 	}
 
-	activeProp := deserialized.GetProperty("active")
-	if activeProp == nil {
+	activeProp := deserialized.Get("active")
+	if activeProp == "" {
 		t.Fatal("Expected active property to be created, got nil")
 	}
-	if activeProp.GetValue() != "true" {
-		t.Errorf("Expected active property value 'true', got '%s'", activeProp.GetValue())
+	if activeProp != "true" {
+		t.Errorf("Expected active property value 'true', got '%s'", activeProp)
 	}
 
 	// Verify children
-	children := deserialized.GetChildren()
+	children := deserialized.ChildrenGet()
 	if len(children) != 1 {
 		t.Fatalf("Expected 1 child, got %d", len(children))
 	}
@@ -286,21 +290,21 @@ func TestNewAtomFromGob_WithValidData(t *testing.T) {
 	if children[0].GetType() != child.GetType() {
 		t.Errorf("Expected child type '%s', got '%s'", child.GetType(), children[0].GetType())
 	}
-	
-	childNameProp := children[0].GetProperty("name")
-	if childNameProp == nil {
+
+	childNameProp := children[0].Get("name")
+	if childNameProp == "" {
 		t.Fatal("Expected child name property to be created, got nil")
 	}
-	if childNameProp.GetValue() != "Test Child" {
-		t.Errorf("Expected child name property value 'Test Child', got '%s'", childNameProp.GetValue())
+	if childNameProp != "Test Child" {
+		t.Errorf("Expected child name property value 'Test Child', got '%s'", childNameProp)
 	}
-	
-	childValueProp := children[0].GetProperty("value")
-	if childValueProp == nil {
+
+	childValueProp := children[0].Get("value")
+	if childValueProp == "" {
 		t.Fatal("Expected child value property to be created, got nil")
 	}
-	if childValueProp.GetValue() != "42" {
-		t.Errorf("Expected child value property value '42', got '%s'", childValueProp.GetValue())
+	if childValueProp != "42" {
+		t.Errorf("Expected child value property value '42', got '%s'", childValueProp)
 	}
 }
 

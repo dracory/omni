@@ -12,9 +12,9 @@ func main() {
 	// Create a document atom with initial properties
 	doc := omni.NewAtom("document",
 		omni.WithID("doc1"),
-		omni.WithProperties(
-			omni.NewProperty("title", "Concurrent Document"),
-		),
+		omni.WithProperties(map[string]string{
+			"title": "Concurrent Document",
+		}),
 	)
 
 	// Number of concurrent workers
@@ -39,10 +39,9 @@ func main() {
 				// Each worker adds a new property with a unique name
 				propName := fmt.Sprintf("worker%d_update%d", workerID, j)
 				
-				// Create and add property atomically
-				prop := omni.NewProperty(propName, "value")
+				// Set property atomically
 				mu.Lock()
-				doc.SetProperty(prop)
+				doc.Set(propName, "value")
 				mu.Unlock()
 
 				// Create child atom with type based on iteration
@@ -57,7 +56,7 @@ func main() {
 			if len(children) > 0 {
 				mu.Lock()
 				for _, child := range children {
-					doc.AddChild(child)
+					doc = doc.ChildAdd(child).(*omni.Atom)
 				}
 				mu.Unlock()
 			}
@@ -67,28 +66,32 @@ func main() {
 	// Wait for all workers to finish
 	wg.Wait()
 
+	// Get all properties and children
+	allProps := doc.GetAll()
+	children := doc.ChildrenGet()
+
 	// Print the results
 	fmt.Printf("Document '%s' has %d properties and %d children\n",
 		doc.GetID(),
-		len(doc.GetProperties()),
-		len(doc.GetChildren()),
+		len(allProps),
+		len(children),
 	)
 
 	// Print a sample of properties
 	fmt.Println("\nSample of properties:")
-	props := doc.GetProperties()
-	for i, prop := range props {
+	i := 0
+	for key, value := range allProps {
 		if i >= 5 { // Limit to first 5 properties
 			break
 		}
-		fmt.Printf("  %s = %s\n", prop.GetName(), prop.GetValue())
+		fmt.Printf("  %s = %s\n", key, value)
+		i++
 	}
-	if len(props) > 5 {
-		fmt.Printf("  ... and %d more\n", len(props)-5)
+	if len(allProps) > 5 {
+		fmt.Printf("  ... and %d more\n", len(allProps)-5)
 	}
 
 	// Print a sample of children
-	children := doc.GetChildren()
 	fmt.Printf("\nSample of children (%d total):\n", len(children))
 	for i, child := range children {
 		if i >= 3 { // Limit to first 3 children

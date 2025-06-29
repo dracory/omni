@@ -10,12 +10,12 @@ import (
 func TestAtomsToJSON(t *testing.T) {
 	// Create test atoms
 	atom1 := omni.NewAtom("type1", omni.WithID("id1"))
-	atom1.SetProperty(omni.NewProperty("key1", "value1"))
+	atom1.Set("key1", "value1")
 
 	atom2 := omni.NewAtom("type2", omni.WithID("id2"))
 	childAtom := omni.NewAtom("childType", omni.WithID("childId"))
-	childAtom.SetProperty(omni.NewProperty("childKey", "childValue"))
-	atom2.AddChild(childAtom)
+	childAtom.Set("childKey", "childValue")
+	atom2.ChildAdd(childAtom)
 
 	// Test with single atom
 	jsonStr, err := omni.AtomsToJSON([]omni.AtomInterface{atom1})
@@ -55,7 +55,7 @@ func TestAtomsToJSON(t *testing.T) {
 
 func TestJSONToAtoms(t *testing.T) {
 	// Test with valid JSON array
-	jsonStr := `[{"id":"id1","type":"type1","properties":{"key1":"value1"},"children":[]}]`
+	jsonStr := `[{"data":{"id":"id1","type":"type1","key1":"value1"},"children":[]}]`
 
 	atoms, err := omni.JSONToAtoms(jsonStr)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestJSONToAtoms(t *testing.T) {
 	if typ := atoms[0].GetType(); typ != "type1" {
 		t.Errorf("atoms[0].GetType() = %v, want %v", typ, "type1")
 	}
-	if prop := atoms[0].GetProperty("key1"); prop == nil || prop.GetValue() != "value1" {
+	if prop := atoms[0].Get("key1"); prop != "value1" {
 		t.Errorf("atoms[0].GetProperty(\"key1\") = %v, want %v", prop, "value1")
 	}
 
@@ -127,15 +127,15 @@ func TestConvertMapToAtoms(t *testing.T) {
 func TestAtomsToMap(t *testing.T) {
 	// Create test atoms
 	atom1 := omni.NewAtom("type1", omni.WithID("id1"))
-	atom1.SetProperty(omni.NewProperty("key1", "value1"))
+	atom1.Set("key1", "value1")
 
 	atom2 := omni.NewAtom("type2", omni.WithID("id2"))
 	childAtom := omni.NewAtom("childType", omni.WithID("childId"))
 	// Make sure we add the child to atom2
-	atom2.AddChild(childAtom)
+	atom2.ChildAdd(childAtom)
 	// Verify child was added
-	if len(atom2.GetChildren()) != 1 {
-		t.Fatalf("Expected 1 child, got %d", len(atom2.GetChildren()))
+	if atom2.ChildrenLength() != 1 {
+		t.Fatalf("Expected 1 child, got %d", atom2.ChildrenLength())
 	}
 
 	// Convert to maps
@@ -207,12 +207,12 @@ func TestAtomsToMap(t *testing.T) {
 func TestAtomsToGob(t *testing.T) {
 	// Create test atoms
 	atom1 := omni.NewAtom("type1", omni.WithID("id1"))
-	atom1.SetProperty(omni.NewProperty("key1", "value1"))
+	atom1.Set("key1", "value1")
 
 	atom2 := omni.NewAtom("type2", omni.WithID("id2"))
 	childAtom := omni.NewAtom("childType", omni.WithID("childId"))
-	childAtom.SetProperty(omni.NewProperty("childKey", "childValue"))
-	atom2.AddChild(childAtom)
+	childAtom.Set("childKey", "childValue")
+	atom2.ChildAdd(childAtom)
 
 	// Test with valid atoms
 	gobData, err := omni.AtomsToGob([]omni.AtomInterface{atom1, atom2})
@@ -257,12 +257,12 @@ func TestAtomsToGob(t *testing.T) {
 func TestGobToAtoms(t *testing.T) {
 	// Create test atoms
 	atom1 := omni.NewAtom("type1", omni.WithID("id1"))
-	atom1.SetProperty(omni.NewProperty("key1", "value1"))
+	atom1.Set("key1", "value1")
 
 	atom2 := omni.NewAtom("type2", omni.WithID("id2"))
 	childAtom := omni.NewAtom("childType", omni.WithID("childId"))
-	childAtom.SetProperty(omni.NewProperty("childKey", "childValue"))
-	atom2.AddChild(childAtom)
+	childAtom.Set("childKey", "childValue")
+	atom2.ChildAdd(childAtom)
 
 	// Encode the atoms to gob using our helper function
 	gobData, err := omni.AtomsToGob([]omni.AtomInterface{atom1, atom2})
@@ -292,7 +292,7 @@ func TestGobToAtoms(t *testing.T) {
 	if id := decodedAtoms[1].GetID(); id != "id2" {
 		t.Errorf("decodedAtoms[1].GetID() = %v, want %v", id, "id2")
 	}
-	children := decodedAtoms[1].GetChildren()
+	children := decodedAtoms[1].ChildrenGet()
 	if len(children) != 1 {
 		t.Fatalf("Expected 1 child, got %d", len(children))
 	}
@@ -339,11 +339,11 @@ func TestMapToAtom(t *testing.T) {
 	if typ := atom.GetType(); typ != "testType" {
 		t.Errorf("atom.GetType() = %v, want %v", typ, "testType")
 	}
-	prop := atom.GetProperty("key1")
-	if prop == nil || prop.GetValue() != "value1" {
-		t.Errorf("atom.GetProperty(\"key1\") = %v, want %v", prop, "value1")
+	prop := atom.Get("key1")
+	if prop != "value1" {
+		t.Errorf("atom.Get(\"key1\") = %v, want %v", prop, "value1")
 	}
-	children := atom.GetChildren()
+	children := atom.ChildrenGet()
 	if len(children) != 1 {
 		t.Fatalf("len(atom.GetChildren()) = %v, want %v", len(children), 1)
 	}

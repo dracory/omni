@@ -1,27 +1,25 @@
 package omni
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/gouniverse/uid"
 )
 
-// NewAtom creates a new Atom with the given type and options.
-// If no ID is provided, a human-readable UID will be generated.
+// NewAtom creates a new Atom with the given type and applies the provided options.
+// If no ID is provided via options, a human-readable UID will be generated.
 func NewAtom(atomType string, opts ...AtomOption) *Atom {
-	a := &Atom{
-		id:         uid.HumanUid(),
-		atomType:   atomType,
-		properties: make([]PropertyInterface, 0),
-		children:   make([]AtomInterface, 0),
+	atom := &Atom{
+		properties: map[string]string{
+			"id":   uid.HumanUid(),
+			"type": atomType,
+		},
+		children: make([]AtomInterface, 0),
 	}
 
 	for _, opt := range opts {
-		opt(a)
+		opt(atom)
 	}
 
-	return a
+	return atom
 }
 
 // NewAtomFromGob creates a new Atom from binary data encoded with the gob package.
@@ -30,11 +28,7 @@ func NewAtom(atomType string, opts ...AtomOption) *Atom {
 //
 // Deprecated: Use GobToAtom instead which provides more robust validation and error handling.
 func NewAtomFromGob(data []byte) (*Atom, error) {
-	atom, err := GobToAtom(data)
-	if err != nil {
-		return nil, err
-	}
-	return atom.(*Atom), nil
+	return GobToAtom(data)
 }
 
 // NewAtomFromJSON creates a new Atom from a JSON string.
@@ -43,27 +37,14 @@ func NewAtomFromGob(data []byte) (*Atom, error) {
 // Returns the Atom and nil error on success, or nil and an error if the JSON is invalid or cannot be unmarshaled.
 //
 // Note: For parsing multiple atoms from a JSON array, use JSONToAtoms instead.
+//
+// Deprecated: Use JSONToAtom instead which provides more robust validation and error handling.
 func NewAtomFromJSON(jsonStr string) (*Atom, error) {
-	if jsonStr == "" {
-		return nil, errors.New("empty JSON string provided")
-	}
-
-	atoms, err := JSONToAtoms(jsonStr)
+	atom, err := JSONToAtom(jsonStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, err
 	}
-
-	if len(atoms) == 0 {
-		return nil, errors.New("no valid atom found in JSON")
-	}
-
-	// Return the first atom and ignore any additional ones
-	atom, ok := atoms[0].(*Atom)
-	if !ok {
-		return nil, errors.New("unexpected atom type")
-	}
-
-	return atom, nil
+	return atom.(*Atom), nil
 }
 
 // NewAtomFromMap creates a new Atom from a map representation.
@@ -86,14 +67,16 @@ type AtomOption func(*Atom)
 // WithID sets the ID of the Atom.
 func WithID(id string) AtomOption {
 	return func(a *Atom) {
-		a.id = id
+		a.Set("id", id)
 	}
 }
 
 // WithProperties adds properties to the Atom.
-func WithProperties(properties ...PropertyInterface) AtomOption {
+func WithProperties(properties map[string]string) AtomOption {
 	return func(a *Atom) {
-		a.properties = append(a.properties, properties...)
+		for k, v := range properties {
+			a.Set(k, v)
+		}
 	}
 }
 
@@ -101,5 +84,12 @@ func WithProperties(properties ...PropertyInterface) AtomOption {
 func WithChildren(children ...AtomInterface) AtomOption {
 	return func(a *Atom) {
 		a.children = append(a.children, children...)
+	}
+}
+
+// WithType sets the type of the Atom.
+func WithType(atomType string) AtomOption {
+	return func(a *Atom) {
+		a.Set("type", atomType)
 	}
 }

@@ -21,11 +21,11 @@ var loremIpsum = []string{
 func createPage(id string, pageNum int, content1, content2 string) omni.AtomInterface {
 	return omni.NewAtom("page",
 		omni.WithID(id),
-		omni.WithProperties(
-			omni.NewProperty("number", strconv.Itoa(pageNum)),
-			omni.NewProperty("content_1", content1),
-			omni.NewProperty("content_2", content2),
-		),
+		omni.WithProperties(map[string]string{
+			"number":    strconv.Itoa(pageNum),
+			"content_1": content1,
+			"content_2": content2,
+		}),
 	)
 }
 
@@ -37,18 +37,20 @@ func printBook(atom omni.AtomInterface, indent int) {
 	}
 
 	fmt.Printf("%s- %s (type: %s)\n", prefix, atom.GetID(), atom.GetType())
-	for _, prop := range atom.GetProperties() {
-		fmt.Printf("%s  %s: %v\n", prefix, prop.GetName(), prop.GetValue())
+	props := atom.GetAll()
+	for key, value := range props {
+		fmt.Printf("%s  %s: %v\n", prefix, key, value)
 	}
 
-	for _, child := range atom.GetChildren() {
+	for _, child := range atom.ChildrenGet() {
 		printBook(child, indent+1)
 	}
 }
 
 func main() {
 	// Create pages with properties
-	pages := make([]omni.AtomInterface, 0, 5)
+	var pages []omni.AtomInterface
+	pages = make([]omni.AtomInterface, 0, 5)
 	for i := 1; i <= 5; i++ {
 		para1 := loremIpsum[i%len(loremIpsum)]
 		para2 := loremIpsum[(i+1)%len(loremIpsum)]
@@ -65,10 +67,10 @@ func main() {
 	book := omni.NewAtom("book",
 		omni.WithID("my_book"),
 		omni.WithChildren(pages...),
-		omni.WithProperties(
-			omni.NewProperty("title", "The Art of Go"),
-			omni.NewProperty("author", "Gopher"),
-		),
+		omni.WithProperties(map[string]string{
+			"title":  "The Art of Go",
+			"author": "Gopher",
+		}),
 	)
 
 	// Print the book structure
@@ -76,18 +78,20 @@ func main() {
 	printBook(book, 0)
 
 	// Convert to JSON and print
-	jsonData, _ := book.ToJson()
+	jsonData, _ := book.ToJSON()
 	fmt.Println("\nBook as JSON:")
 	fmt.Println(string(jsonData))
 
 	// Print a sample page
-	if len(book.GetChildren()) > 0 {
-		firstPage := book.GetChildren()[0]
+	children := book.ChildrenGet()
+	if len(children) > 0 {
+		firstPage := children[0]
+		pageProps := firstPage.GetAll()
 		fmt.Println("\nSample Page Content:")
-		fmt.Printf("Page %s\n", firstPage.GetProperty("number").GetValue())
+		fmt.Printf("Page %s\n", pageProps["number"])
 		fmt.Println("---")
-		fmt.Println(firstPage.GetProperty("content_1").GetValue())
+		fmt.Println(pageProps["content_1"])
 		fmt.Println()
-		fmt.Println(firstPage.GetProperty("content_2").GetValue())
+		fmt.Println(pageProps["content_2"])
 	}
 }

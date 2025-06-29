@@ -7,51 +7,42 @@ import (
 )
 
 func TestNewAtom(t *testing.T) {
-	a := NewAtom("test-type")
+	a := NewAtom("test-type", WithID("test-id"))
 	if a == nil {
 		t.Error("NewAtom returned nil")
 	}
-	if a.GetID() == "" {
-		t.Error("NewAtom did not generate an ID")
+	if got := a.GetID(); got != "test-id" {
+		t.Errorf("NewAtom() ID = %v, want %v", got, "test-id")
 	}
-	if a.GetType() != "test-type" {
-		t.Errorf("Expected type 'test-type', got '%s'", a.GetType())
+	if got := a.GetType(); got != "test-type" {
+		t.Errorf("NewAtom() type = %v, want %v", got, "test-type")
 	}
-	if len(a.GetProperties()) != 0 {
-		t.Error("NewAtom should not have any properties by default")
+	if got := a.Get("test"); got != "" {
+		t.Errorf("NewAtom() Get(\"test\") = %v, want empty string", got)
 	}
-	if len(a.GetChildren()) != 0 {
-		t.Error("NewAtom should not have any children by default")
+	if children := a.ChildrenGet(); len(children) != 0 {
+		t.Errorf("NewAtom() should have no children, got %d", len(children))
 	}
 }
 
 func TestAtom_PropertyManagement(t *testing.T) {
-	prop1 := NewProperty("prop1", "value1")
-	a := NewAtom("test", WithProperties(prop1))
+	a := NewAtom("test", WithID("test-id"))
 
-	// Test SetProperty and GetProperty
-	if got := a.GetProperty("prop1"); got == nil || got.GetValue() != "value1" {
-		t.Error("Failed to set/get property")
+	// Test Set and Get
+	a.Set("prop1", "value1")
+	if got := a.Get("prop1"); got != "value1" {
+		t.Errorf("SetProperty(\"prop1\", \"value1\") = %v, want %v", got, "value1")
 	}
 
 	// Test updating property
-	prop1Updated := NewProperty("prop1", "updated")
-	a.SetProperty(prop1Updated)
-	if got := a.GetProperty("prop1").GetValue(); got != "updated" {
-		t.Errorf("GetProperty().GetValue() = %v, want %v", got, "updated")
+	a.Set("prop1", "updated")
+	if got := a.Get("prop1"); got != "updated" {
+		t.Errorf("SetProperty(\"prop1\", \"updated\") = %v, want %v", got, "updated")
 	}
 
-	// Test SetProperties and GetProperties
-	prop2 := NewProperty("prop2", "value2")
-	a.SetProperties([]PropertyInterface{prop1Updated, prop2})
-	if got := len(a.GetProperties()); got != 2 {
-		t.Errorf("Expected 2 properties, got %d", got)
-	}
-
-	// Test RemoveProperty
-	a.RemoveProperty("prop1")
-	if a.GetProperty("prop1") != nil {
-		t.Error("Property was not removed")
+	// Test getting non-existent property
+	if got := a.Get("nonexistent"); got != "" {
+		t.Error("Expected empty string for non-existent property, got:", got)
 	}
 }
 
@@ -60,11 +51,10 @@ func TestAtom_ChildManagement(t *testing.T) {
 	child1 := NewAtom("item", WithID("child1"))
 	child2 := NewAtom("item", WithID("child2"))
 
-	// Test AddChild and GetChildren
-	parent.AddChild(child1)
-	parent.AddChild(child2)
+	// Test ChildAdd and ChildrenGet
+	parent.ChildAdd(child1).ChildAdd(child2)
 
-	children := parent.GetChildren()
+	children := parent.ChildrenGet()
 	if len(children) != 2 {
 		t.Fatalf("Expected 2 children, got %d", len(children))
 	}
@@ -84,15 +74,14 @@ func TestAtom_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				// Test property operations
-				prop := NewProperty("prop", "value")
-				a.SetProperty(prop)
-				_ = a.GetProperty("prop")
-				a.RemoveProperty("prop")
+				a.Set("prop", "value")
+				_ = a.Get("prop")
+				a.Remove("prop") // Clear property
 
 				// Test child operations
-				child := NewAtom("item", WithID("child"))
-				a.AddChild(child)
-				_ = a.GetChildren()
+				child := NewAtom("item", WithID(fmt.Sprintf("child-%d-%d", id, j)))
+				a.ChildAdd(child)
+				_ = a.ChildrenGet()
 			}
 		}(i)
 	}
@@ -100,11 +89,11 @@ func TestAtom_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	// Verify final state
-	if got := a.GetProperty("prop"); got != nil {
+	if got := a.Get("prop"); got != "" {
 		t.Error("Property should not exist after concurrent operations")
 	}
 	// At least some children should have been added
-	if len(a.GetChildren()) == 0 {
+	if len(a.ChildrenGet()) == 0 {
 		t.Error("Expected some children after concurrent operations")
 	}
 }
@@ -112,22 +101,22 @@ func TestAtom_ConcurrentAccess(t *testing.T) {
 func TestAtom_EdgeCases(t *testing.T) {
 	a := NewAtom("test", WithID("edge"))
 
-	// Test nil property
-	a.SetProperty(nil)
-	if len(a.GetProperties()) != 0 {
-		t.Error("Should not add nil property")
+	// Test empty key
+	a.Set("", "empty-key")
+	if got := a.Get(""); got != "empty-key" {
+		t.Error("Should handle empty key")
 	}
 
-	// Test empty property name
-	emptyProp := NewProperty("", "value")
-	a.SetProperty(emptyProp)
-	if got := a.GetProperty("").GetValue(); got != "value" {
-		t.Error("Should handle empty property name")
+	// Test setting empty value
+	a.Set("empty-value", "")
+	if got := a.Get("empty-value"); got != "" {
+		t.Error("Should handle empty value")
 	}
 
-	// Test removing non-existent property
-	a.RemoveProperty("nonexistent")
-	// Should not panic
+	// Test getting non-existent key
+	if got := a.Get("nonexistent"); got != "" {
+		t.Error("Should return empty string for non-existent key")
+	}
 }
 
 func TestAtom_AddChildren(t *testing.T) {
@@ -135,8 +124,8 @@ func TestAtom_AddChildren(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		child1 := NewAtom("item", WithID("child1"))
 		child2 := NewAtom("item", WithID("child2"))
-		parent.AddChildren([]AtomInterface{child1, child2})
-		children := parent.GetChildren()
+		parent.ChildAdd(child1).ChildAdd(child2)
+		children := parent.ChildrenGet()
 		if len(children) != 2 {
 			t.Fatalf("Expected 2 children, got %d", len(children))
 		}
@@ -148,12 +137,12 @@ func TestAtom_AddChildren(t *testing.T) {
 	t.Run("Add to existing children", func(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		existingChild := NewAtom("item", WithID("existing"))
-		parent.AddChild(existingChild)
+		parent.ChildAdd(existingChild)
 		child1 := NewAtom("item", WithID("child1"))
 		child2 := NewAtom("item", WithID("child2"))
-		parent.AddChildren([]AtomInterface{child1, child2})
+		parent.ChildAdd(child1).ChildAdd(child2)
 
-		children := parent.GetChildren()
+		children := parent.ChildrenGet()
 		if len(children) != 3 {
 			t.Fatalf("Expected 3 children, got %d", len(children))
 		}
@@ -162,32 +151,42 @@ func TestAtom_AddChildren(t *testing.T) {
 		}
 	})
 
-	t.Run("Add nil and empty slice", func(t *testing.T) {
+	t.Run("Add nil child", func(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
-		parent.AddChildren(nil) // Should not panic
+		// Adding nil should be a no-op
+		parent.ChildAdd(nil)
+		if parent.ChildrenLength() != 0 {
+			t.Error("Adding nil child should be a no-op")
+		}
 
-		// Initial add
+		// Add a real child
 		child := NewAtom("item", WithID("child"))
-		parent.AddChildren([]AtomInterface{child})
-
-		// Add empty slice
-		parent.AddChildren([]AtomInterface{})
-
-		children := parent.GetChildren()
-		if len(children) != 1 || children[0].GetID() != "child" {
-			t.Error("Adding nil or empty slice should not affect existing children")
+		parent.ChildAdd(child)
+		children := parent.ChildrenGet()
+		if parent.ChildrenLength() != 1 || children[0].GetID() != "child" {
+			t.Error("Failed to add valid child")
 		}
 	})
 
-	t.Run("Add with nil children", func(t *testing.T) {
+	t.Run("Set children", func(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
-		child := NewAtom("item", WithID("child"))
+		child1 := NewAtom("item", WithID("child1"))
+		child2 := NewAtom("item", WithID("child2"))
 
-		parent.AddChildren([]AtomInterface{child, nil, nil})
+		parent.ChildrenSet([]AtomInterface{child1, child2})
 
-		children := parent.GetChildren()
-		if len(children) != 1 || children[0].GetID() != "child" {
-			t.Error("Nil children should be skipped")
+		children := parent.ChildrenGet()
+		if len(children) != 2 {
+			t.Fatalf("Expected 2 children, got %d", len(children))
+		}
+		if children[0].GetID() != "child1" || children[1].GetID() != "child2" {
+			t.Error("Children not set correctly")
+		}
+
+		// Test setting to nil
+		parent.ChildrenSet(nil)
+		if parent.ChildrenLength() != 0 {
+			t.Error("Setting children to nil should clear children")
 		}
 	})
 }
@@ -197,8 +196,8 @@ func TestAtom_SetChildren(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		child1 := NewAtom("item", WithID("child1"))
 		child2 := NewAtom("item", WithID("child2"))
-		parent.SetChildren([]AtomInterface{child1, child2})
-		children := parent.GetChildren()
+		parent.ChildrenSet([]AtomInterface{child1, child2})
+		children := parent.ChildrenGet()
 
 		if len(children) != 2 {
 			t.Fatalf("Expected 2 children, got %d", len(children))
@@ -211,13 +210,13 @@ func TestAtom_SetChildren(t *testing.T) {
 	t.Run("Replace existing children", func(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		oldChild := NewAtom("item", WithID("old"))
-		parent.AddChild(oldChild)
+		parent.ChildAdd(oldChild)
 
 		newChild1 := NewAtom("item", WithID("new1"))
 		newChild2 := NewAtom("item", WithID("new2"))
-		parent.SetChildren([]AtomInterface{newChild1, newChild2})
+		parent.ChildrenSet([]AtomInterface{newChild1, newChild2})
 
-		children := parent.GetChildren()
+		children := parent.ChildrenGet()
 		if len(children) != 2 {
 			t.Fatalf("Expected 2 children, got %d", len(children))
 		}
@@ -229,15 +228,15 @@ func TestAtom_SetChildren(t *testing.T) {
 	t.Run("Set empty children", func(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		child := NewAtom("item", WithID("child"))
-		parent.AddChild(child)
+		parent.ChildAdd(child)
 
-		parent.SetChildren([]AtomInterface{})
-		if len(parent.GetChildren()) != 0 {
+		parent.ChildrenSet([]AtomInterface{})
+		if parent.ChildrenLength() != 0 {
 			t.Error("Expected no children after setting to empty slice")
 		}
 
-		parent.SetChildren(nil)
-		if len(parent.GetChildren()) != 0 {
+		parent.ChildrenSet(nil)
+		if parent.ChildrenLength() != 0 {
 			t.Error("Expected no children after setting to nil")
 		}
 	})
@@ -246,11 +245,14 @@ func TestAtom_SetChildren(t *testing.T) {
 		parent := NewAtom("container", WithID("parent"))
 		child := NewAtom("item", WithID("child"))
 
-		parent.SetChildren([]AtomInterface{child, nil, nil})
+		parent.ChildrenSet([]AtomInterface{child, nil, nil})
 
-		children := parent.GetChildren()
-		if len(children) != 1 || children[0].GetID() != "child" {
-			t.Error("Nil children should be skipped")
+		children := parent.ChildrenGet()
+		if len(children) != 1 {
+			t.Fatalf("Expected 1 child, got %d", len(children))
+		}
+		if children[0].GetID() != "child" {
+			t.Error("Nil children should be filtered out")
 		}
 	})
 }
@@ -259,17 +261,17 @@ func TestAtom_ConcurrentChildOperations(t *testing.T) {
 	parent := NewAtom("container", WithID("parent"))
 	var wg sync.WaitGroup
 
-	// Test concurrent AddChild
+	// Test concurrent ChildAdd
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			child := NewAtom("item", WithID(fmt.Sprintf("child-%d", id)))
-			parent.AddChild(child)
+			parent.ChildAdd(child)
 		}(i)
 	}
 
-	// Test concurrent SetChildren
+	// Test concurrent ChildrenSet
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -278,23 +280,23 @@ func TestAtom_ConcurrentChildOperations(t *testing.T) {
 				NewAtom("item", WithID(fmt.Sprintf("new-child1-%d", id))),
 				NewAtom("item", WithID(fmt.Sprintf("new-child2-%d", id))),
 			}
-			parent.SetChildren(children)
+			parent.ChildrenSet(children)
 		}(i)
 	}
 
-	// Test concurrent GetChildren
+	// Test concurrent ChildrenGet
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			_ = parent.GetChildren()
+			_ = parent.ChildrenGet()
 		}()
 	}
 
 	wg.Wait()
 
 	// Verify some invariants
-	children := parent.GetChildren()
+	children := parent.ChildrenGet()
 	if len(children) == 0 {
 		t.Error("Expected some children after concurrent operations")
 	}

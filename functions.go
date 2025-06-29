@@ -14,7 +14,7 @@ import (
 //
 // Business logic:
 // - Handles nil input by returning an empty array JSON string
-// - Converts each non-nil atom to a JSON object using toJsonObject()
+// - Converts each non-nil atom to a JSON object using ToMap()
 // - Returns a JSON array of atom objects
 //
 // Returns:
@@ -25,20 +25,53 @@ func AtomsToJSON(atoms []AtomInterface) (string, error) {
 		return "[]", nil
 	}
 
-	atomsMap := make([]AtomJsonObject, 0, len(atoms))
+	atomsMaps := make([]map[string]any, 0, len(atoms))
 
 	for _, atom := range atoms {
 		if atom != nil {
-			atomsMap = append(atomsMap, atom.toJsonObject())
+			atomsMaps = append(atomsMaps, atom.ToMap())
 		}
 	}
 
-	atomsJson, err := json.Marshal(atomsMap)
+	atomsJSON, err := json.Marshal(atomsMaps)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal atoms to JSON: %w", err)
 	}
 
-	return string(atomsJson), nil
+	return string(atomsJSON), nil
+}
+
+// JSONToAtom converts a JSON string to a single Atom.
+//
+// Business logic:
+// - Handles empty input by returning an error
+// - Validates JSON structure before processing
+// - Converts JSON object to an Atom using MapToAtom
+//
+// Parameters:
+//   - jsonStr: JSON string containing a single atom's data
+//
+// Returns:
+//   - AtomInterface: the parsed atom
+//   - error: if JSON is invalid or missing required fields
+func JSONToAtom(jsonStr string) (AtomInterface, error) {
+	if jsonStr == "" {
+		return nil, errors.New("empty JSON string provided")
+	}
+
+	// First try to parse as a single atom
+	var atomMap map[string]any
+	if err := json.Unmarshal([]byte(jsonStr), &atomMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	// Convert map to atom
+	atom, err := MapToAtom(atomMap)
+	if err != nil {
+		return nil, fmt.Errorf("invalid atom data: %w", err)
+	}
+
+	return atom, nil
 }
 
 // JSONToAtoms converts a JSON string to a slice of AtomInterface.
@@ -143,7 +176,8 @@ func AtomsToMap(atoms []AtomInterface) []map[string]any {
 // MapToAtom converts a map to an AtomInterface.
 //
 // The map must represent a valid atom with at least "id" and "type" fields.
-// Properties should be in a "properties" map, and children in a "children" slice.
+// Properties should be in a nested "properties" map, and children in a "children" slice.
+// For backward compatibility, top-level properties are also supported but not recommended.
 //
 // Parameters:
 //   - atomMap: map containing the atom data
@@ -156,51 +190,82 @@ func MapToAtom(atomMap map[string]any) (AtomInterface, error) {
 		return nil, errors.New("atom map cannot be nil")
 	}
 
-	// Validate the map structure first
-	if valid, err := isValidAtomMap(atomMap); !valid {
-		return nil, fmt.Errorf("invalid atom map: %v", err)
-	}
-
 	// Make a copy of the map to avoid modifying the original
 	atomMapCopy := make(map[string]any, len(atomMap))
 	for k, v := range atomMap {
 		atomMapCopy[k] = v
 	}
 
-	// Ensure properties is a map if not present
-	props, ok := atomMapCopy["properties"].(map[string]any)
-	if !ok {
-		props = make(map[string]any)
-		atomMapCopy["properties"] = props
-	}
-
-	// Ensure children is a slice if not present
-	if _, ok := atomMapCopy["children"].([]any); !ok {
-		atomMapCopy["children"] = make([]any, 0)
-	}
+	// Extract type and id from top-level fields
+	atomType, _ := atomMapCopy["type"].(string)
+	id, _ := atomMapCopy["id"].(string)
 
 	// Create a new atom with the required fields
-	atomType, _ := atomMapCopy["type"].(string)
-	atom := NewAtom(atomType, WithID(atomMapCopy["id"].(string)))
+	var atom *Atom
+	if id != "" && atomType != "" {
+		atom = NewAtom(atomType, WithID(id))
+	} else if atomType != "" {
+		atom = NewAtom(atomType)
+	} else {
+		return nil, errors.New("missing required 'type' field in atom map")
+	}
 
-	// Set properties
-	for key, value := range props {
-		if strVal, ok := value.(string); ok {
-			atom.SetProperty(NewProperty(key, strVal))
+	// Process properties from the nested properties map if it exists
+	props := make(map[string]string)
+	if propsMap, ok := atomMapCopy["properties"].(map[string]any); ok && len(propsMap) > 0 {
+		for k, v := range propsMap {
+			// Convert value to string
+			var strVal string
+			switch v := v.(type) {
+			case string:
+				strVal = v
+			case fmt.Stringer:
+				strVal = v.String()
+			default:
+				strVal = fmt.Sprintf("%v", v)
+			}
+			props[k] = strVal
 		}
 	}
 
+	// For backward compatibility, also check for top-level properties
+	for k, v := range atomMapCopy {
+		if k != "id" && k != "type" && k != "properties" && k != "children" {
+			var strVal string
+			switch v := v.(type) {
+			case string:
+				strVal = v
+			case fmt.Stringer:
+				strVal = v.String()
+			default:
+				strVal = fmt.Sprintf("%v", v)
+			}
+			props[k] = strVal
+		}
+	}
+
+	// Set all properties
+	if len(props) > 0 {
+		atom.SetAll(props)
+	}
+
 	// Handle children if they exist
-	if children, ok := atomMapCopy["children"].([]any); ok {
+	if children, ok := atomMapCopy["children"].([]any); ok && len(children) > 0 {
 		for _, child := range children {
 			if childMap, ok := child.(map[string]any); ok {
 				childAtom, err := MapToAtom(childMap)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create child atom: %w", err)
 				}
-				atom.AddChild(childAtom)
+				// Add child and update the atom reference
+				atom = atom.ChildAdd(childAtom).(*Atom)
 			}
 		}
+	}
+
+	// Final validation
+	if atom.GetType() == "" {
+		return nil, errors.New("missing required 'type' field in atom map")
 	}
 
 	return atom, nil
@@ -326,11 +391,11 @@ func AtomsToGob(atoms []AtomInterface) ([]byte, error) {
 //   - data: binary data containing gob-encoded atoms
 //
 // Returns:
-//   - []AtomInterface: slice of decoded atoms
+//   - []*Atom: slice of decoded atoms
 //   - error: if the data cannot be decoded or is invalid
-func GobToAtoms(data []byte) ([]AtomInterface, error) {
+func GobToAtoms(data []byte) ([]*Atom, error) {
 	if len(data) == 0 {
-		return []AtomInterface{}, nil
+		return []*Atom{}, nil
 	}
 
 	buffer := bytes.NewBuffer(data)
@@ -347,7 +412,7 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 		return nil, fmt.Errorf("invalid atom count: %d", count)
 	}
 
-	result := make([]AtomInterface, 0, count)
+	result := make([]*Atom, 0, count)
 
 	// Then decode each atom
 	for i := 0; i < count; i++ {
@@ -380,12 +445,8 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 		}
 
 		// Validate the atom data before creating the atom
-		if valid, err := isValidGobData(atomData); !valid {
-			return nil, fmt.Errorf("invalid gob data for atom %d: %v", i, err)
-		}
-
 		// Create the atom from the gob data
-		atom, err := NewAtomFromGob(atomData)
+		atom, err := GobToAtom(atomData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create atom %d from gob: %w", i, err)
 		}
@@ -396,109 +457,49 @@ func GobToAtoms(data []byte) ([]AtomInterface, error) {
 	return result, nil
 }
 
-// isValidGobData validates that the given data is a valid gob-encoded atom.
+// GobToAtom decodes an atom from gob-encoded data.
 //
 // Business logic:
-// - Checks for empty or nil input
-// - Attempts to decode the data into a temporary struct
-// - Validates the presence of required fields
-// - Recursively validates child atoms
+// - Decodes the binary data into a temporary struct
+// - Creates a new atom with the decoded type and id from the data map
+// - Sets all properties from the data map
+// - Recursively decodes and adds child atoms
+// - Returns an error if the data is invalid
 //
 // Parameters:
-//   - data: binary data to validate
+//   - data: binary data containing the gob-encoded atom
 //
 // Returns:
-//   - bool: true if the data is valid
-//   - error: description of the validation failure if invalid
-func isValidGobData(data []byte) (bool, error) {
-	if len(data) == 0 {
-		return false, errors.New("cannot validate empty data")
-	}
-
-	// Temporary struct for validation
-	var temp struct {
-		ID         string
-		Type       string
-		Properties map[string]string
-		Children   [][]byte
-	}
-
-	// Try to decode the data
-	r := bytes.NewReader(data)
-	decoder := gob.NewDecoder(r)
-	if err := decoder.Decode(&temp); err != nil {
-		return false, fmt.Errorf("invalid gob data: %w", err)
-	}
-
-	// Validate required fields
-	if temp.Type == "" {
-		return false, errors.New("missing required field: Type")
-	}
-
-	if temp.ID == "" {
-		return false, errors.New("missing required field: ID")
-	}
-
-	// Validate properties if present
-	if temp.Properties == nil {
-		return false, errors.New("properties map cannot be nil")
-	}
-
-	// Recursively validate children
-	for i, childData := range temp.Children {
-		if valid, err := isValidGobData(childData); !valid {
-			return false, fmt.Errorf("invalid child at index %d: %v", i, err)
-		}
-	}
-
-	return true, nil
-}
-
-// GobToAtom decodes an Atom from binary data encoded with the gob package.
-// This is a standalone function that creates a new Atom instance from gob-encoded data.
-//
-// Business logic:
-// - Handles empty or nil input by returning an error
-// - Validates the gob data before decoding
-// - Decodes a single atom from the gob-encoded data
-// - Validates the decoded atom
-//
-// Parameters:
-//   - data: binary data containing a gob-encoded atom
-//
-// Returns:
-//   - AtomInterface: the decoded atom
-//   - error: if the data cannot be decoded or is invalid
-func GobToAtom(data []byte) (AtomInterface, error) {
-	if len(data) == 0 {
-		return nil, errors.New("cannot decode empty data")
-	}
-
-	// Validate the gob data first
-	if valid, err := isValidGobData(data); !valid {
-		return nil, fmt.Errorf("invalid gob data: %v", err)
+//   - *Atom: the decoded atom
+//   - error: if decoding fails
+func GobToAtom(data []byte) (*Atom, error) {
+	// Validate the input data first
+	if valid, err := isValidAtomGob(data); !valid {
+		return nil, fmt.Errorf("invalid gob data: %w", err)
 	}
 
 	// Create a temporary struct for decoding
 	var temp struct {
-		ID         string
-		Type       string
-		Properties map[string]string
-		Children   [][]byte
+		Data     map[string]string
+		Children [][]byte
 	}
 
-	// Decode the data into the temporary struct
+	// Decode the data (we know it's valid from the validation above)
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&temp); err != nil {
-		return nil, fmt.Errorf("gob decode failed: %w", err)
+		// This should theoretically never happen since we already validated the data
+		return nil, fmt.Errorf("unexpected error during gob decode: %w", err)
 	}
 
-	// Create a new atom
-	atom := NewAtom(temp.Type, WithID(temp.ID))
+	// Get type from data map (we know it exists from validation)
+	atomType := temp.Data["type"]
 
-	// Convert properties
-	for name, value := range temp.Properties {
-		atom.SetProperty(NewProperty(name, value))
+	// Create a new atom with the decoded type
+	atom := NewAtom(atomType)
+
+	// Set all properties from the data map (including id if present)
+	for key, value := range temp.Data {
+		atom.Set(key, value)
 	}
 
 	// Recursively decode children
@@ -507,10 +508,67 @@ func GobToAtom(data []byte) (AtomInterface, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode child: %w", err)
 		}
-		atom.AddChild(child)
+		// Use ChildAdd to add the child
+		atom = atom.ChildAdd(child).(*Atom)
 	}
 
 	return atom, nil
+}
+
+// isValidAtomGob validates that the given data is a valid gob-encoded atom.
+//
+// Business logic:
+// - Checks for empty or nil input
+// - Attempts to decode the data into a temporary struct
+// - Validates the presence of required fields (id, type)
+// - Recursively validates child atoms
+//
+// Parameters:
+//   - data: binary data to validate
+//
+// Returns:
+//   - bool: true if the data is valid
+//   - error: description of the validation failure if invalid
+func isValidAtomGob(data []byte) (bool, error) {
+	if len(data) == 0 {
+		return false, errors.New("cannot validate empty data")
+	}
+
+	// Create a temporary struct for validation
+	var temp struct {
+		Data     map[string]string
+		Children [][]byte
+	}
+
+	// Try to decode the data
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(&temp); err != nil {
+		return false, fmt.Errorf("invalid gob data: %w", err)
+	}
+
+	// Validate data map exists and contains required fields
+	if temp.Data == nil {
+		return false, errors.New("data map cannot be nil")
+	}
+
+	// Check for required fields
+	if temp.Data["type"] == "" {
+		return false, errors.New("missing required field: type")
+	}
+
+	// ID is optional, but if present it must be a non-empty string
+	if id, exists := temp.Data["id"]; exists && id == "" {
+		return false, errors.New("id cannot be empty if present")
+	}
+
+	// Recursively validate children
+	for i, childData := range temp.Children {
+		if valid, err := isValidAtomGob(childData); !valid {
+			return false, fmt.Errorf("invalid child at index %d: %v", i, err)
+		}
+	}
+
+	return true, nil
 }
 
 // isValidAtomJSON checks if the passed JSON string is a valid Atom JSON object or array of objects
@@ -569,7 +627,7 @@ func isValidAtomJSON(jsonString string) (bool, error) {
 //
 // Business logic:
 // - Checks for required fields (id, type)
-// - Validates that properties is a map if present
+// - Validates that all properties are strings or in a nested properties map
 // - Validates that children is a slice if present
 // - Validates that all children are valid atom maps
 //
@@ -595,10 +653,34 @@ func isValidAtomMap(atomMap map[string]any) (bool, error) {
 		return false, errors.New("atom map must contain a non-empty string 'type' field")
 	}
 
-	// Validate properties if present
+	// Check for invalid top-level keys (only id, type, properties, children are allowed)
+	for key := range atomMap {
+		switch key {
+		case "id", "type", "properties", "children":
+			// These are valid top-level keys
+			continue
+		default:
+			return false, fmt.Errorf("invalid top-level key '%s' in atom map, only 'id', 'type', 'properties', and 'children' are allowed", key)
+		}
+	}
+
+	// Validate properties map if present
 	if props, ok := atomMap["properties"]; ok && props != nil {
-		if _, ok := props.(map[string]any); !ok {
-			return false, errors.New("atom properties must be a map[string]any")
+		propsMap, ok := props.(map[string]any)
+		if !ok {
+			return false, errors.New("properties must be a map[string]any")
+		}
+
+		// Validate that all property values are strings or convertible to strings
+		for propKey, propValue := range propsMap {
+			switch propValue.(type) {
+			case string, fmt.Stringer, int, int8, int16, int32, int64,
+				uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+				// These types can be converted to strings
+				continue
+			default:
+				return false, fmt.Errorf("property '%s' in properties map has invalid type %T, must be string or convertible to string", propKey, propValue)
+			}
 		}
 	}
 
@@ -610,9 +692,13 @@ func isValidAtomMap(atomMap map[string]any) (bool, error) {
 		}
 
 		for i, child := range childrenSlice {
+			if child == nil {
+				continue // Skip nil children
+			}
+
 			childMap, ok := child.(map[string]any)
 			if !ok {
-				return false, fmt.Errorf("child at index %d is not a valid atom map", i)
+				return false, fmt.Errorf("child at index %d is not a valid atom map (got type %T)", i, child)
 			}
 
 			if valid, err := isValidAtomMap(childMap); !valid {

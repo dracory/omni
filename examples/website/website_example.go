@@ -2,10 +2,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/dracory/omni"
 )
@@ -15,32 +20,32 @@ func createPage(site *omni.Atom, pageID, uri, title, headerText, paragraphText s
 	// Create the page
 	page := omni.NewAtom("page",
 		omni.WithID(pageID),
-		omni.WithProperties(
-			omni.NewProperty("title", title),
-			omni.NewProperty("uri", uri),
-		),
+		omni.WithProperties(map[string]string{
+			"title": title,
+			"uri":   uri,
+		}),
 	)
 
 	// Add header
 	header := omni.NewAtom("header",
 		omni.WithID(pageID+"_header"),
-		omni.WithProperties(
-			omni.NewProperty("text", headerText),
-		),
+		omni.WithProperties(map[string]string{
+			"text": headerText,
+		}),
 	)
-	page.AddChild(header)
+	page = page.ChildAdd(header).(*omni.Atom)
 
 	// Add paragraph
 	paragraph := omni.NewAtom("paragraph",
 		omni.WithID(pageID+"paragraph"),
-		omni.WithProperties(
-			omni.NewProperty("content", paragraphText),
-		),
+		omni.WithProperties(map[string]string{
+			"content": paragraphText,
+		}),
 	)
-	page.AddChild(paragraph)
+	page = page.ChildAdd(paragraph).(*omni.Atom)
 
 	// Add page to site
-	site.AddChild(page)
+	site = site.ChildAdd(page).(*omni.Atom)
 }
 
 // printWebsite recursively prints the website structure
@@ -49,19 +54,22 @@ func printWebsite(atom omni.AtomInterface, indent string) {
 	fmt.Printf("%s- %s (%s)", indent, atom.GetID(), atom.GetType())
 
 	// Print properties if any
-	if props := atom.GetProperties(); len(props) > 0 {
+	props := atom.GetAll()
+	if len(props) > 0 {
 		fmt.Print(" - Properties: ")
-		for i, prop := range props {
-			if i > 0 {
+		first := true
+		for key, value := range props {
+			if !first {
 				fmt.Print(", ")
 			}
-			fmt.Printf("%s: %q", prop.GetName(), prop.GetValue())
+			fmt.Printf("%s: %q", key, value)
+			first = false
 		}
 	}
 	fmt.Println()
 
 	// Recursively print children
-	for _, child := range atom.GetChildren() {
+	for _, child := range atom.ChildrenGet() {
 		printWebsite(child, indent+"  ")
 	}
 }
@@ -73,21 +81,21 @@ func renderPage(page omni.AtomInterface) string {
 	}
 
 	html := "<!DOCTYPE html>\n<html>\n<head>\n"
-	if title := page.GetProperty("title"); title != nil {
-		html += fmt.Sprintf("  <title>%s</title>\n", title.GetValue())
+	if title := page.Get("title"); title != "" {
+		html += fmt.Sprintf("  <title>%s</title>\n", title)
 	}
 	html += "</head>\n<body>\n"
 
 	// Add header and content
-	for _, child := range page.GetChildren() {
+	for _, child := range page.ChildrenGet() {
 		switch child.GetType() {
 		case "header":
-			if text := child.GetProperty("text"); text != nil {
-				html += fmt.Sprintf("  <h1>%s</h1>\n", text.GetValue())
+			if text := child.Get("text"); text != "" {
+				html += fmt.Sprintf("  <h1>%s</h1>\n", text)
 			}
 		case "paragraph":
-			if content := child.GetProperty("content"); content != nil {
-				html += fmt.Sprintf("  <p>%s</p>\n", content.GetValue())
+			if content := child.Get("content"); content != "" {
+				html += fmt.Sprintf("  <p>%s</p>\n", content)
 			}
 		}
 	}
@@ -98,16 +106,9 @@ func renderPage(page omni.AtomInterface) string {
 
 // findPageByURI finds a page by its URI in the website
 func findPageByURI(site *omni.Atom, uri string) omni.AtomInterface {
-	// Normalize the URI to ensure it starts with /
-	if !strings.HasPrefix(uri, "/") {
-		uri = "/" + uri
-	}
-
-	for _, page := range site.GetChildren() {
-		if page.GetType() == "page" {
-			if uriProp := page.GetProperty("uri"); uriProp != nil && uriProp.GetValue() == uri {
-				return page
-			}
+	for _, page := range site.ChildrenGet() {
+		if pageURI := page.Get("uri"); pageURI == uri {
+			return page
 		}
 	}
 	return nil
@@ -116,9 +117,9 @@ func findPageByURI(site *omni.Atom, uri string) omni.AtomInterface {
 // listPages returns a list of all available pages with their URIs
 func listPages(site *omni.Atom) []omni.AtomInterface {
 	var pages []omni.AtomInterface
-	for _, child := range site.GetChildren() {
-		if child.GetType() == "page" {
-			pages = append(pages, child)
+	for _, page := range site.ChildrenGet() {
+		if page.GetType() == "page" {
+			pages = append(pages, page)
 		}
 	}
 	return pages
@@ -126,60 +127,73 @@ func listPages(site *omni.Atom) []omni.AtomInterface {
 
 func main() {
 	// Parse command line flags
-	pageFlag := flag.String("page", "", "Page to display (e.g., 'home' or 'about')")
+	port := flag.Int("port", 8080, "Port to run the server on")
 	flag.Parse()
 
-	// Create the website root
+	// Create a new website
 	site := omni.NewAtom("website",
 		omni.WithID("my_website"),
-		omni.WithProperties(
-			omni.NewProperty("name", "My Awesome Site"),
-		),
+		omni.WithProperties(map[string]string{
+			"title": "My Awesome Website",
+		}),
 	)
 
-	// Add home page
-	createPage(site, "home", "/", "Home", "Welcome to My Website",
-		"This is the home page of my awesome website. Here you can find all the latest news and updates.")
+	// Add some pages
+	createPage(site, "home", "/", "Home", "Welcome to My Website", "This is the home page of my awesome website.")
+	createPage(site, "about", "/about", "About", "About Us", "We are a company that builds amazing things with Go!")
+	createPage(site, "contact", "/contact", "Contact", "Get in Touch", "Email us at contact@example.com")
 
-	// Add about page
-	createPage(site, "about", "/about", "About Us", "About Our Company",
-		"We are a small team of passionate developers creating amazing web experiences. "+
-			"Our mission is to make the web a better place, one website at a time.")
+	// Print the website structure
+	fmt.Println("Website structure:")
+	printWebsite(site, "  ")
 
-	// Handle page display based on command line flag
-	if *pageFlag != "" {
-		// Try to find the requested page
-		var pageURI string
-		if *pageFlag == "home" || *pageFlag == "" {
-			pageURI = "/"
-		} else if !strings.HasPrefix(*pageFlag, "/") {
-			pageURI = "/" + *pageFlag
-		} else {
-			pageURI = *pageFlag
+	// Set up HTTP server
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		page := findPageByURI(site, r.URL.Path)
+		if page == nil {
+			http.NotFound(w, r)
+			return
 		}
+		fmt.Fprintf(w, renderPage(page))
+	})
 
-		page := findPageByURI(site, pageURI)
-		if page != nil {
-			fmt.Println(renderPage(page))
-		} else {
-			fmt.Printf("Page '%s' not found. Available pages:\n", pageURI)
-			for _, p := range listPages(site) {
-				uri := p.GetProperty("uri").GetValue()
-				title := p.GetProperty("title").GetValue()
-				fmt.Printf("  %s - %s\n", uri, title)
-			}
-			os.Exit(1)
-		}
-	} else {
-		// No page specified, show the website structure
-		fmt.Println("Website Structure:")
-		printWebsite(site, "")
-
-		// Also show usage
-		fmt.Println("\nUsage:")
-		fmt.Println("  go run website_example.go --page=home")
-		fmt.Println("  go run website_example.go --page=about")
-		fmt.Println("  go run website_example.go --page=/")
-		fmt.Println("  go run website_example.go --page=/about")
+	// Start the web server in a goroutine so it doesn't block
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", *port),
+		Handler: nil, // Use default mux
 	}
+
+	// Channel to listen for interrupt signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Start server in a goroutine
+	go func() {
+		fmt.Printf("\nStarting web server on http://localhost:%d\n", *port)
+		fmt.Println("Available pages:")
+		for _, page := range listPages(site) {
+			uri := page.Get("uri")
+			title := page.Get("title")
+			fmt.Printf("  - %s: %s\n", uri, title)
+		}
+		fmt.Println("\nPress Ctrl+C to stop the server")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error starting server: %v\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-stop
+	fmt.Println("\nShutting down server...")
+
+	// Create a deadline to wait for
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown the server
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v\n", err)
+	}
+
+	fmt.Println("Server gracefully stopped")
 }
