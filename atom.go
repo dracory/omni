@@ -22,6 +22,56 @@ type Atom struct {
 	mu         sync.RWMutex
 }
 
+// FromGob decodes the atom from gob-encoded data.
+// This method satisfies the AtomInterface requirement.
+func (a *Atom) FromGob(data []byte) error {
+	var temp struct {
+		ID         string
+		Type       string
+		Properties map[string]string
+		Children   [][]byte
+	}
+
+	// Register the type
+	gob.Register(&Atom{})
+
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(&temp); err != nil {
+		return fmt.Errorf("error decoding atom from gob: %v", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.id = temp.ID
+	a.atomType = temp.Type
+	a.properties = temp.Properties
+
+	// Decode children
+	a.children = make([]AtomInterface, len(temp.Children))
+	for i, childData := range temp.Children {
+		child := &Atom{}
+		if err := child.FromGob(childData); err != nil {
+			return fmt.Errorf("error decoding child %d: %v", i, err)
+		}
+		a.children[i] = child
+	}
+
+	return nil
+}
+
+// GobEncode implements the gob.GobEncoder interface.
+// This is a wrapper around ToGob for compatibility with the gob package.
+func (a *Atom) GobEncode() ([]byte, error) {
+	return a.ToGob()
+}
+
+// GobDecode implements the gob.GobDecoder interface.
+// This is a wrapper around FromGob for compatibility with the gob package.
+func (a *Atom) GobDecode(data []byte) error {
+	return a.FromGob(data)
+}
+
 // GetID returns the atom's ID.
 func (a *Atom) GetID() string {
 	a.mu.RLock()
@@ -204,6 +254,52 @@ func (a *Atom) ChildrenSet(children []AtomInterface) AtomInterface {
 	return a
 }
 
+// ToGob encodes the atom to a gob-encoded byte slice.
+// This is the primary method for gob encoding that satisfies the AtomInterface.
+func (a *Atom) ToGob() ([]byte, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	// First, encode all children to gob
+	childData := make([][]byte, len(a.children))
+	for i, child := range a.children {
+		if child != nil {
+			childBytes, err := child.ToGob()
+			if err != nil {
+				return nil, fmt.Errorf("error encoding child %d: %v", i, err)
+			}
+			childData[i] = childBytes
+		}
+	}
+
+	// Create a temporary struct for encoding with exported fields
+	temp := struct {
+		ID         string
+		Type       string
+		Properties map[string]string
+		Children   [][]byte
+	}{
+		ID:         a.id,
+		Type:       a.atomType,
+		Properties: a.properties,
+		Children:   childData,
+	}
+
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+
+	// Register the type
+	gob.Register(&Atom{})
+
+
+	// Encode the data
+	if err := encoder.Encode(temp); err != nil {
+		return nil, fmt.Errorf("error encoding atom to gob: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
 // ToMap converts the atom to a map representation with the following structure:
 // - id: the atom's ID
 // - type: the atom's type
@@ -262,73 +358,6 @@ func (a *Atom) ToJSONPretty() (string, error) {
 		return "", fmt.Errorf("failed to marshal to pretty JSON: %w", err)
 	}
 	return string(jsonData), nil
-}
-
-func (a *Atom) ToGob() ([]byte, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	// Create a temporary struct for encoding
-	temp := struct {
-		Properties map[string]string
-		Children   []AtomInterface
-	}{
-		Properties: a.properties,
-		Children:   a.children,
-	}
-
-	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-
-	// Register the types that might be in the interface
-	gob.Register(&Atom{})
-
-	// Encode the data
-	err := encoder.Encode(temp)
-	if err != nil {
-		return nil, fmt.Errorf("error encoding atom to gob: %v", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// FromGob decodes a Atom from gob-encoded data.
-func FromGob(data []byte) (*Atom, error) {
-	var temp struct {
-		Properties map[string]string
-		Children   []*Atom // Using *Atom here for proper type assertion
-	}
-
-	// Register the types that might be in the interface
-	gob.Register(&Atom{})
-
-	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&temp)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding atom from gob: %v", err)
-	}
-
-	// Create a new atom with the decoded data
-	atom := &Atom{
-		properties: temp.Properties,
-		children:   make([]AtomInterface, len(temp.Children)),
-	}
-
-	// Convert children to AtomInterface slice
-	for i, child := range temp.Children {
-		atom.children[i] = child
-	}
-
-	return atom, nil
-}
-
-// NewAtomWithData creates a new Atom with the given ID, type, and initial data.
-// Deprecated: Use NewAtom with WithID and WithData options instead
-func NewAtomWithData(id, atomType string, data map[string]string) *Atom {
-	atom := &Atom{
-		properties: data,
-	}
-	return atom.SetID(id).SetType(atomType).(*Atom)
 }
 
 // Size returns the approximate memory usage of the atom in bytes.

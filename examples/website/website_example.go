@@ -16,7 +16,7 @@ import (
 )
 
 // createPage creates a new page with a header and paragraph
-func createPage(site *omni.Atom, pageID, uri, title, headerText, paragraphText string) {
+func createPage(site omni.AtomInterface, pageID, uri, title, headerText, paragraphText string) omni.AtomInterface {
 	// Create the page
 	page := omni.NewAtom("page",
 		omni.WithID(pageID),
@@ -44,8 +44,9 @@ func createPage(site *omni.Atom, pageID, uri, title, headerText, paragraphText s
 	)
 	page = page.ChildAdd(paragraph).(*omni.Atom)
 
-	// Add page to site
-	site = site.ChildAdd(page).(*omni.Atom)
+	// Add page to site and return the updated site
+	site = site.ChildAdd(page)
+	return site
 }
 
 // printWebsite recursively prints the website structure
@@ -105,7 +106,7 @@ func renderPage(page omni.AtomInterface) string {
 }
 
 // findPageByURI finds a page by its URI in the website
-func findPageByURI(site *omni.Atom, uri string) omni.AtomInterface {
+func findPageByURI(site omni.AtomInterface, uri string) omni.AtomInterface {
 	for _, page := range site.ChildrenGet() {
 		if pageURI := page.Get("uri"); pageURI == uri {
 			return page
@@ -115,7 +116,7 @@ func findPageByURI(site *omni.Atom, uri string) omni.AtomInterface {
 }
 
 // listPages returns a list of all available pages with their URIs
-func listPages(site *omni.Atom) []omni.AtomInterface {
+func listPages(site omni.AtomInterface) []omni.AtomInterface {
 	var pages []omni.AtomInterface
 	for _, page := range site.ChildrenGet() {
 		if page.GetType() == "page" {
@@ -138,10 +139,10 @@ func main() {
 		}),
 	)
 
-	// Add some pages
-	createPage(site, "home", "/", "Home", "Welcome to My Website", "This is the home page of my awesome website.")
-	createPage(site, "about", "/about", "About", "About Us", "We are a company that builds amazing things with Go!")
-	createPage(site, "contact", "/contact", "Contact", "Get in Touch", "Email us at contact@example.com")
+	// Create pages and update site reference
+	site = createPage(site, "home", "/", "Home", "Welcome to My Website", "This is the home page of my awesome website.")
+	site = createPage(site, "about", "/about", "About", "About Us", "We are a company that builds amazing things with Go!")
+	site = createPage(site, "contact", "/contact", "Contact", "Get in Touch", "Feel free to reach out to us at contact@example.com")
 
 	// Print the website structure
 	fmt.Println("Website structure:")
@@ -154,7 +155,7 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprintf(w, renderPage(page))
+		fmt.Fprint(w, renderPage(page))
 	})
 
 	// Start the web server in a goroutine so it doesn't block

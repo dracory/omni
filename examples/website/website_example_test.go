@@ -18,7 +18,7 @@ func TestCreatePage(t *testing.T) {
 	)
 
 	// Create a test page
-	createPage(site, "home", "/", "Home", "Welcome", "This is the home page")
+	site = createPage(site, "home", "/", "Home", "Welcome", "This is the home page")
 
 	// Verify the page was added correctly
 	pages := site.ChildrenGet()
@@ -62,9 +62,9 @@ func TestCreatePage(t *testing.T) {
 func TestFindPageByURI(t *testing.T) {
 	// Create a test site with pages
 	site := omni.NewAtom("website")
-	createPage(site, "home", "/", "Home", "Welcome", "Home page content")
-	createPage(site, "about", "/about", "About", "About Us", "About page content")
-	createPage(site, "contact", "/contact", "Contact", "Contact Us", "Contact page content")
+	site = createPage(site, "home", "/", "Home", "Welcome", "Home page content")
+	site = createPage(site, "about", "/about", "About", "About Us", "About page content")
+	site = createPage(site, "contact", "/contact", "Contact", "Contact Us", "Contact page content")
 
 	// Test finding existing pages
 	tests := []struct {
@@ -85,7 +85,7 @@ func TestFindPageByURI(t *testing.T) {
 
 		title := page.Get("title")
 		if title != tt.title {
-			t.Errorf("Expected title '%s' for URI '%s', got '%s'", 
+			t.Errorf("Expected title '%s' for URI '%s', got '%s'",
 				tt.title, tt.uri, title)
 		}
 	}
@@ -101,8 +101,8 @@ func TestFindPageByURI(t *testing.T) {
 func TestListPages(t *testing.T) {
 	// Create a test site with pages
 	site := omni.NewAtom("website")
-	createPage(site, "home", "/", "Home", "Welcome", "Home page content")
-	createPage(site, "about", "/about", "About", "About Us", "About page content")
+	site = createPage(site, "home", "/", "Home", "Welcome", "Home page content")
+	site = createPage(site, "about", "/about", "About", "About Us", "About page content")
 
 	// Get list of pages
 	pages := listPages(site)
@@ -126,7 +126,7 @@ func TestListPages(t *testing.T) {
 func TestRenderPage(t *testing.T) {
 	// Create a test page
 	site := omni.NewAtom("website")
-	createPage(site, "test", "/test", "Test Page", "Test Header", "Test paragraph content")
+	site = createPage(site, "test", "/test", "Test Page", "Test Header", "Test paragraph content")
 
 	// Get the test page
 	page := findPageByURI(site, "/test")
@@ -149,10 +149,4 @@ func TestRenderPage(t *testing.T) {
 	if !strings.Contains(html, "<title>Test Page</title>") {
 		t.Error("Expected HTML to contain page title")
 	}
-}
-
-// TestMain runs the example and verifies it doesn't panic
-func TestMain(m *testing.M) {
-	// Run the example to ensure it doesn't panic
-	main()
 }

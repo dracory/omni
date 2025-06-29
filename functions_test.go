@@ -55,7 +55,7 @@ func TestAtomsToJSON(t *testing.T) {
 
 func TestJSONToAtoms(t *testing.T) {
 	// Test with valid JSON array
-	jsonStr := `[{"data":{"id":"id1","type":"type1","key1":"value1"},"children":[]}]`
+	jsonStr := `[{"id":"id1","type":"type1","properties":{"key1":"value1"},"children":[]}]`
 
 	atoms, err := omni.JSONToAtoms(jsonStr)
 	if err != nil {
