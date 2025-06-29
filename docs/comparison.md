@@ -6,10 +6,11 @@ This document provides a detailed comparison between Omni and [gouniverse/dataob
 
 ### Omni
 - **Hierarchical Data Model**: Built around composable atoms that can have parent-child relationships
-- **Strong Typing**: Properties and atoms have defined types
+- **String-based Properties**: Simple key-value storage with string values
 - **Thread Safety**: Built-in synchronization for concurrent access
 - **Functional Options**: Clean API using functional options pattern
 - **Tree Structures**: Optimized for representing hierarchical data
+- **Serialization**: Supports JSON and Gob formats
 
 ### gouniverse/dataobject
 - **Flat Data Model**: Simple key-value store
@@ -23,11 +24,11 @@ This document provides a detailed comparison between Omni and [gouniverse/dataob
 | Feature | Omni | gouniverse/dataobject |
 |---------|------|----------------------|
 | **Data Model** | Hierarchical tree structure | Flat key-value store |
-| **Type System** | Strongly typed | String-based |
+| **Property Storage** | Map of string key-value pairs | Map of string key-value pairs |
 | **Thread Safety** | Built-in (thread-safe) | Not thread-safe by default |
 | **Change Tracking** | No built-in tracking | Built-in dirty flag |
-| **Serialization** | JSON and map conversion | JSON and Gob |
-| **Performance** | Slightly slower (mutex, type checking) | Faster for simple operations |
+| **Serialization** | JSON and Gob formats | JSON and Gob formats |
+| **Performance** | Slightly slower (mutex overhead) | Faster for simple operations |
 | **Dependencies** | Standard library only | Standard library only |
 | **API Style** | Method chaining, functional options | Traditional getter/setter |
 
@@ -40,19 +41,23 @@ This document provides a detailed comparison between Omni and [gouniverse/dataob
 // Create an atom with properties
 atom := omni.NewAtom("person",
     omni.WithID("123"),
-    omni.WithProperties([]omni.PropertyInterface{
-        omni.NewProperty("name", "John Doe"),
-        omni.NewProperty("age", "30"),
+    omni.WithProperties(map[string]string{
+        "name": "John Doe",
+        "age": "30",
     }),
 )
 
 // Add a child atom
-child := omni.NewAtom("address", 
-    omni.WithProperties([]omni.PropertyInterface{
-        omni.NewProperty("street", "123 Main St"),
+child := omni.NewAtom("address",
+    omni.WithProperties(map[string]string{
+        "street": "123 Main St",
     }),
 )
-atom.AddChild(child)
+atom.ChildAdd(child)
+
+// Set/Get properties
+atom.Set("email", "john@example.com")
+name := atom.Get("name") // "John Doe"
 ```
 
 **gouniverse/dataobject**
@@ -71,10 +76,17 @@ do.Set("address.street", "123 Main St") // Flat structure with dot notation
 **Omni**
 ```go
 // To JSON
-jsonStr, err := omni.MarshalAtomsToJson([]omni.AtomInterface{atom})
+jsonStr, err := atom.ToJSON()
 
 // From JSON
-atoms, err := omni.UnmarshalJsonToAtoms(jsonStr)
+parsedAtom, err := omni.NewAtomFromJSON(jsonStr)
+
+// To Gob
+gobData, err := atom.ToGob()
+
+// From Gob
+newAtom := &omni.Atom{}
+err = newAtom.FromGob(gobData)
 ```
 
 **gouniverse/dataobject**
@@ -99,17 +111,17 @@ do, err := dataobject.NewFromGob(gobData)
    - For component-based architectures
    - When parent-child relationships are important
 
-2. **Type Safety**
-   - When you need strong typing for properties and atoms
-   - For better compile-time checks
-
-3. **Concurrent Access**
+2. **Thread Safety**
    - When multiple goroutines will access the data structure
    - For thread-safe operations out of the box
 
-4. **Complex Data Models**
-   - For rich domain models
+3. **Complex Data Models**
+   - For rich domain models with nested structures
    - When you need to model complex relationships
+
+4. **Functional API**
+   - When you prefer a fluent, chainable API
+   - For clean configuration with functional options
 
 ## When to Use gouniverse/dataobject
 
@@ -125,9 +137,9 @@ do, err := dataobject.NewFromGob(gobData)
    - When you need maximum performance for simple operations
    - For high-throughput scenarios where the overhead of mutexes isn't needed
 
-4. **Gob Serialization**
-   - When you need Gob format for efficient Go-to-Go communication
-   - For storing binary data
+4. **Change Tracking**
+   - When you need built-in dirty flag functionality
+   - For forms or UIs that track changes
 
 ## Migration Between the Two
 
@@ -140,7 +152,7 @@ func ConvertDataObjectToOmni(do *dataobject.DataObject) *omni.Atom {
     
     // Copy all fields as properties
     for k, v := range do.Data() {
-        atom.SetProperty(omni.NewProperty(k, v))
+        atom.Set(k, v)
     }
     
     return atom
@@ -155,8 +167,8 @@ func ConvertOmniToDataObject(atom omni.AtomInterface) *dataobject.DataObject {
     do := dataobject.New()
     
     // Copy all properties
-    for _, prop := range atom.GetProperties() {
-        do.Set(prop.GetName(), prop.GetValue())
+    for k, v := range atom.GetAll() {
+        do.Set(k, v)
     }
     
     // Note: This flattens the hierarchy
@@ -168,6 +180,6 @@ func ConvertOmniToDataObject(atom omni.AtomInterface) *dataobject.DataObject {
 
 ## Conclusion
 
-Both Omni and gouniverse/dataobject serve different purposes and have their own strengths. Choose Omni when you need hierarchical data structures, strong typing, and thread safety. Opt for gouniverse/dataobject when you need a simple, flat key-value store with change tracking and Gob serialization support.
+Both Omni and gouniverse/dataobject serve different purposes and have their own strengths. Choose Omni when you need hierarchical data structures, thread safety, and a functional API. Opt for gouniverse/dataobject when you need a simple, flat key-value store with change tracking.
 
-For most applications that deal with complex domain models or component-based architectures, Omni provides the necessary features and type safety. For simpler use cases where you just need a dynamic key-value store, gouniverse/dataobject might be more appropriate.
+For applications that deal with complex domain models or component-based architectures, Omni provides the necessary features for structured data. For simpler use cases where you just need a dynamic key-value store with change tracking, gouniverse/dataobject might be more appropriate.
