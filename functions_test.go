@@ -100,6 +100,16 @@ func TestJSONToAtoms(t *testing.T) {
 	}
 }
 
+func TestJSONToAtoms_EmptyInputReturnsEmptySlice(t *testing.T) {
+    atoms, err := omni.JSONToAtoms("")
+    if err != nil {
+        t.Fatalf("JSONToAtoms(\"\") error = %v", err)
+    }
+    if len(atoms) != 0 {
+        t.Fatalf("JSONToAtoms(\"\") len = %d, want 0", len(atoms))
+    }
+}
+
 func TestConvertMapToAtoms(t *testing.T) {
 	// Test with valid maps
 	maps := []map[string]any{
@@ -212,6 +222,13 @@ func TestAtomsToMap(t *testing.T) {
 	if len(maps) != 0 {
 		t.Errorf("AtomsToMap() len = %v, want %v", len(maps), 0)
 	}
+}
+
+func TestAtomsToMap_NilInputReturnsNil(t *testing.T) {
+    maps := omni.AtomsToMap(nil)
+    if maps != nil {
+        t.Fatalf("AtomsToMap(nil) = %#v, want nil", maps)
+    }
 }
 
 func TestAtomsToGob(t *testing.T) {
