@@ -1,0 +1,50 @@
+version: '3'
+
+vars:
+  PKG: ./...
+  TEMP_DIR: tmp
+
+tasks:
+  test:
+    desc: Run all tests
+    cmds:
+      - go test {{.PKG}}
+
+  test:race:
+    desc: Run tests with the race detector
+    cmds:
+      - go test -race {{.PKG}}
+
+  test:cover:
+    desc: Run tests with coverage and show summary
+    cmds:
+      - go test -cover {{.PKG}}
+
+  test:coverprofile:
+    desc: Run tests with coverage and write profile to coverage.out
+    deps: [create-temp-dir]
+    cmds:
+      - go test -coverprofile={{.TEMP_DIR}}/coverage.out {{.PKG}}
+    sources:
+      - '**/*.go'
+
+  test:coverhtml:
+    desc: Generate HTML coverage report at coverage.html
+    deps: [create-temp-dir]
+    cmds:
+      - echo "Generating cover report..."
+      - go test ./... -coverprofile={{.TEMP_DIR}}/coverage.out  -covermode=count
+      - go tool cover -html={{.TEMP_DIR}}/coverage.out
+      - echo "Done!"
+
+  create-temp-dir:
+    desc: Create a temporary directory
+    cmds:
+      - echo "Creating temp dir..."
+      - cmd: mkdir -p {{.TEMP_DIR}}
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "New-Item -ItemType Directory -Path {{.TEMP_DIR}} -Force"
+        platforms: [windows]
+
+
+      
