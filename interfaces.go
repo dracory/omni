@@ -24,12 +24,28 @@ type AtomInterface interface {
 	// Children management
 	ChildAdd(child AtomInterface) AtomInterface
 	ChildDeleteByID(id string) AtomInterface
+	ChildFindByID(id string) AtomInterface
 
 	ChildrenAdd(children []AtomInterface) AtomInterface
+	ChildrenFindByType(atomType string) []AtomInterface
 	ChildrenGet() []AtomInterface
 	ChildrenSet(children []AtomInterface) AtomInterface
 
 	ChildrenLength() int
+
+	// Clone creates a deep copy of the atom.
+	// Clone() AtomInterface
+
+	// // Equals checks if two atoms are equal.
+	// Equals(other AtomInterface) bool
+
+	// // Hash returns a hash value for the atom.
+	// Hash() string
+
+	// Find by ID or type
+	// FindByID(id string) AtomInterface
+	// FindFirstByType(atomType string) AtomInterface
+	// FindByType(atomType string) []AtomInterface
 
 	// Serialization
 	ToMap() map[string]any

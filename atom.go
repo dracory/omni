@@ -211,6 +211,18 @@ func (a *Atom) ChildDeleteByID(id string) AtomInterface {
 	return a
 }
 
+// ChildFindByID returns the first immediate child with the given ID, or nil if not found.
+func (a *Atom) ChildFindByID(id string) AtomInterface {
+    a.mu.RLock()
+    defer a.mu.RUnlock()
+    for _, child := range a.children {
+        if child != nil && child.GetID() == id {
+            return child
+        }
+    }
+    return nil
+}
+
 // ChildrenAdd adds multiple child atoms.
 func (a *Atom) ChildrenAdd(children []AtomInterface) AtomInterface {
 	a.mu.Lock()
@@ -252,6 +264,22 @@ func (a *Atom) ChildrenSet(children []AtomInterface) AtomInterface {
 	a.children = make([]AtomInterface, len(validChildren))
 	copy(a.children, validChildren)
 	return a
+}
+
+// ChildrenFindByType returns all immediate children that match the provided type.
+func (a *Atom) ChildrenFindByType(atomType string) []AtomInterface {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.children) == 0 {
+		return []AtomInterface{}
+	}
+	result := make([]AtomInterface, 0)
+	for _, child := range a.children {
+		if child != nil && child.GetType() == atomType {
+			result = append(result, child)
+		}
+	}
+	return result
 }
 
 // ToGob encodes the atom to a gob-encoded byte slice.
