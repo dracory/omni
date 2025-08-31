@@ -39,7 +39,7 @@ go get github.com/dracory/omni
 
 ### Requirements
 
-- Go 1.18 or higher
+- Go 1.24 or higher
 - No external dependencies
 
 ## Core Concepts
