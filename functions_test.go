@@ -392,3 +392,33 @@ func TestJSONToAtoms_ObjectMissingType_ReturnsError(t *testing.T) {
         t.Fatal("JSONToAtoms should error for object missing required fields")
     }
 }
+
+func TestJSONToAtom_EmptyInputReturnsError(t *testing.T) {
+    atom, err := omni.JSONToAtom("")
+    if err == nil {
+        t.Fatal("JSONToAtom should return error for empty input")
+    }
+    if atom != nil {
+        t.Fatalf("JSONToAtom returned non-nil atom for empty input: %#v", atom)
+    }
+}
+
+func TestJSONToAtom_ValidObject(t *testing.T) {
+    jsonStr := `{"id":"id1","type":"type1","properties":{"k":"v"}}`
+    atom, err := omni.JSONToAtom(jsonStr)
+    if err != nil {
+        t.Fatalf("JSONToAtom error = %v", err)
+    }
+    if atom == nil {
+        t.Fatal("JSONToAtom returned nil atom for valid input")
+    }
+    if id := atom.GetID(); id != "id1" {
+        t.Fatalf("atom.GetID() = %q, want id1", id)
+    }
+    if typ := atom.GetType(); typ != "type1" {
+        t.Fatalf("atom.GetType() = %q, want type1", typ)
+    }
+    if val := atom.Get("k"); val != "v" {
+        t.Fatalf("atom.Get(\"k\") = %v, want v", val)
+    }
+}
