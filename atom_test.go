@@ -2,6 +2,7 @@ package omni
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -308,5 +309,180 @@ func TestAtom_ConcurrentChildOperations(t *testing.T) {
 			t.Errorf("Duplicate child ID found: %s", child.GetID())
 		}
 		seen[child.GetID()] = true
+	}
+}
+
+func TestChildDeleteByID_RemovesCorrectChild(t *testing.T) {
+	p := NewAtom("parent")
+	c1 := NewAtom("child", WithID("c1"))
+	c2 := NewAtom("child", WithID("c2"))
+	c3 := NewAtom("child", WithID("c3"))
+	p.ChildAdd(c1).ChildAdd(c2).ChildAdd(c3)
+
+	p.ChildDeleteByID("c2")
+
+	kids := p.ChildrenGet()
+	if len(kids) != 2 {
+		t.Fatalf("want 2 children after delete, got %d", len(kids))
+	}
+	if kids[0].GetID() != "c1" || kids[1].GetID() != "c3" {
+		t.Fatalf("unexpected children order/ids: %s, %s", kids[0].GetID(), kids[1].GetID())
+	}
+
+	// deleting non-existing should be no-op
+	p.ChildDeleteByID("missing")
+	if p.ChildrenLength() != 2 {
+		t.Fatalf("delete of missing changed length: %d", p.ChildrenLength())
+	}
+}
+
+func TestChildrenGet_ReturnsCopy(t *testing.T) {
+	p := NewAtom("parent")
+	c1 := NewAtom("child", WithID("c1"))
+	c2 := NewAtom("child", WithID("c2"))
+	p.ChildrenAdd([]AtomInterface{c1, c2})
+
+	got := p.ChildrenGet()
+	if len(got) != 2 {
+		t.Fatalf("want 2 children, got %d", len(got))
+	}
+	// mutate returned slice; underlying parent slice must not change
+	got[0] = NewAtom("child", WithID("other"))
+	kids := p.ChildrenGet()
+	if kids[0].GetID() != "c1" {
+		t.Fatalf("parent's children modified via copy; want c1, got %s", kids[0].GetID())
+	}
+}
+
+func TestChildrenSet_FiltersNil(t *testing.T) {
+	p := NewAtom("parent")
+	c1 := NewAtom("child", WithID("c1"))
+	p.ChildrenSet([]AtomInterface{c1, nil, nil})
+	if p.ChildrenLength() != 1 {
+		t.Fatalf("want 1 child after filtering nils, got %d", p.ChildrenLength())
+	}
+}
+
+func TestSetAllAndGetAll_CopySemantics(t *testing.T) {
+	p := NewAtom("parent")
+	props := map[string]string{"a": "1", "b": "2"}
+	p.SetAll(props)
+
+	// mutate original map after SetAll; atom should now reflect new map reference
+	props["a"] = "x"
+	if v := p.Get("a"); v != "x" {
+		t.Fatalf("expected atom to reflect SetAll map reference changes; got %q", v)
+	}
+
+	// GetAll should return a copy; mutating it should not affect atom
+	got := p.GetAll()
+	got["a"] = "y"
+	if v := p.Get("a"); v != "x" {
+		t.Fatalf("GetAll must return copy; mutation leaked into atom: %q", v)
+	}
+}
+
+func TestHasAndRemove_Behavior(t *testing.T) {
+	p := NewAtom("parent")
+	if p.Has("k") {
+		t.Fatal("Has should be false when properties are nil/empty")
+	}
+	p.Set("k", "v")
+	if !p.Has("k") {
+		t.Fatal("Has should be true after Set")
+	}
+	p.Remove("k")
+	if p.Has("k") || p.Get("k") != "" {
+		t.Fatal("Remove should delete key and Get should return empty string")
+	}
+	// removing non-existing should not panic
+	p.Remove("missing")
+}
+
+func TestWithData_SetsIDTypeAndProps(t *testing.T) {
+	p := NewAtom("ignored", WithData(map[string]string{
+		"id":   "ID1",
+		"type": "T1",
+		"x":    "y",
+	}))
+	if p.GetID() != "ID1" || p.GetType() != "T1" || p.Get("x") != "y" {
+		t.Fatalf("WithData did not set fields correctly: id=%s type=%s x=%s", p.GetID(), p.GetType(), p.Get("x"))
+	}
+}
+
+func TestToJSONPretty_AndToMap(t *testing.T) {
+	p := NewAtom("t", WithID("i"))
+	p.Set("a", "1")
+	j, err := p.ToJSONPretty()
+	if err != nil {
+		t.Fatalf("ToJSONPretty error: %v", err)
+	}
+	if !strings.Contains(j, "\n  ") { // expects indentation
+		t.Fatalf("Pretty JSON does not look indented: %q", j)
+	}
+	m := p.ToMap()
+	if m["id"].(string) != "i" || m["type"].(string) != "t" {
+		t.Fatalf("ToMap missing id/type: %+v", m)
+	}
+	if props, ok := m["properties"].(map[string]string); !ok || props["a"] != "1" {
+		t.Fatalf("ToMap properties incorrect: %#v", m["properties"])
+	}
+}
+
+func TestGobEncodeDecode_Wrappers(t *testing.T) {
+	p := NewAtom("t", WithID("i")).(*Atom)
+	p.Set("k", "v")
+	data, err := p.GobEncode()
+	if err != nil {
+		t.Fatalf("GobEncode error: %v", err)
+	}
+	var q Atom
+	if err := q.GobDecode(data); err != nil {
+		t.Fatalf("GobDecode error: %v", err)
+	}
+	if q.GetID() != "i" || q.GetType() != "t" || q.Get("k") != "v" {
+		t.Fatalf("decoded atom mismatch: id=%s type=%s k=%s", q.GetID(), q.GetType(), q.Get("k"))
+	}
+}
+
+func TestMemoryUsage_PositiveAndIncreases(t *testing.T) {
+	p := NewAtom("t")
+	base := p.MemoryUsage()
+	if base <= 0 {
+		t.Fatalf("MemoryUsage should be positive, got %d", base)
+	}
+	p.Set("a", strings.Repeat("x", 100))
+	p.ChildAdd(NewAtom("child"))
+	if grew := p.MemoryUsage(); grew < base {
+		t.Fatalf("MemoryUsage should increase after adding data: before=%d after=%d", base, grew)
+	}
+}
+
+func TestToJSON_IncludesIDTypeAndProps(t *testing.T) {
+	p := NewAtom("t", WithID("i"))
+	p.Set("a", "1")
+	j, err := p.ToJSON()
+	if err != nil {
+		t.Fatalf("ToJSON error: %v", err)
+	}
+	if !strings.Contains(j, `"id":"i"`) || !strings.Contains(j, `"type":"t"`) {
+		t.Fatalf("ToJSON missing id/type: %q", j)
+	}
+	if !strings.Contains(j, `"properties":{"a":"1"}`) {
+		t.Fatalf("ToJSON missing properties: %q", j)
+	}
+}
+
+func TestToJSON_WithoutProperties_OmitsPropertiesField(t *testing.T) {
+	p := NewAtom("t", WithID("i"))
+	j, err := p.ToJSON()
+	if err != nil {
+		t.Fatalf("ToJSON error: %v", err)
+	}
+	if !strings.Contains(j, `"id":"i"`) || !strings.Contains(j, `"type":"t"`) {
+		t.Fatalf("ToJSON missing id/type: %q", j)
+	}
+	if strings.Contains(j, `"properties"`) {
+		t.Fatalf("ToJSON should omit empty properties field: %q", j)
 	}
 }

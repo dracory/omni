@@ -327,3 +327,34 @@ func TestNewAtomFromGob_WithInvalidData(t *testing.T) {
 		t.Error("Expected atom to be nil on error")
 	}
 }
+
+func TestFromGob_WithValidData(t *testing.T) {
+	// Prepare a simple atom and serialize it
+	a := omni.NewAtom("t", omni.WithID("i"))
+	a.Set("k", "v")
+	data, err := a.ToGob()
+	if err != nil {
+		t.Fatalf("ToGob failed: %v", err)
+	}
+
+	// Decode using FromGob (concrete helper)
+	got, err := omni.FromGob(data)
+	if err != nil {
+		t.Fatalf("FromGob failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("FromGob returned nil atom")
+	}
+	if got.GetID() != "i" || got.GetType() != "t" || got.Get("k") != "v" {
+		t.Fatalf("decoded atom mismatch: id=%s type=%s k=%s", got.GetID(), got.GetType(), got.Get("k"))
+	}
+}
+
+func TestFromGob_WithInvalidData(t *testing.T) {
+	if atom, err := omni.FromGob([]byte("bad")); err == nil || atom != nil {
+		t.Fatalf("expected error and nil atom for invalid gob, got atom=%v err=%v", atom, err)
+	}
+	if atom, err := omni.FromGob([]byte{}); err == nil || atom != nil {
+		t.Fatalf("expected error and nil atom for empty gob, got atom=%v err=%v", atom, err)
+	}
+}
