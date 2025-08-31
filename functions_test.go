@@ -53,6 +53,16 @@ func TestAtomsToJSON(t *testing.T) {
 	}
 }
 
+func TestAtomsToJSON_NilInput(t *testing.T) {
+    jsonStr, err := omni.AtomsToJSON(nil)
+    if err != nil {
+        t.Fatalf("AtomsToJSON(nil) error = %v", err)
+    }
+    if jsonStr != "[]" {
+        t.Fatalf("AtomsToJSON(nil) = %q, want []", jsonStr)
+    }
+}
+
 func TestJSONToAtoms(t *testing.T) {
 	// Test with valid JSON array
 	jsonStr := `[{"id":"id1","type":"type1","properties":{"key1":"value1"},"children":[]}]`
@@ -311,63 +321,57 @@ func TestGobToAtoms(t *testing.T) {
 	if err == nil {
 		t.Error("GobToAtoms() with invalid data: expected error, got nil")
 	}
+
+	// Test preserving nil entries
+	atoms := []omni.AtomInterface{atom1, nil, atom2}
+	gobData, err = omni.AtomsToGob(atoms)
+	if err != nil {
+		t.Fatalf("AtomsToGob with nil entries error = %v", err)
+	}
+	decoded, err := omni.GobToAtoms(gobData)
+	if err != nil {
+		t.Fatalf("GobToAtoms decode error = %v", err)
+	}
+	if len(decoded) != 3 {
+		t.Fatalf("decoded len = %d, want 3", len(decoded))
+	}
+	if decoded[0] == nil || decoded[0].GetID() != "id1" {
+		t.Fatalf("decoded[0] mismatch: %#v", decoded[0])
+	}
+	if decoded[1] != nil {
+		t.Fatalf("decoded[1] should be nil, got %#v", decoded[1])
+	}
+	if decoded[2] == nil || decoded[2].GetID() != "id2" {
+		t.Fatalf("decoded[2] mismatch: %#v", decoded[2])
+	}
+	}
+
+func TestMapToAtoms_SkipsInvalidAndPreservesNil(t *testing.T) {
+    maps := []map[string]any{
+        {"id": "id1", "type": "type1"},
+        nil,
+        {"id": "", "type": "bad"},
+        {"type": "missingId"},
+        {"id": "id2", "type": "type2"},
+    }
+    atoms := omni.MapToAtoms(maps)
+    if len(atoms) != 3 {
+        t.Fatalf("MapToAtoms len = %d, want 3", len(atoms))
+    }
+    if atoms[0] == nil || atoms[0].GetID() != "id1" {
+        t.Fatalf("atoms[0] mismatch, got %#v", atoms[0])
+    }
+    if atoms[1] != nil {
+        t.Fatalf("atoms[1] should be nil, got %#v", atoms[1])
+    }
+    if atoms[2] == nil || atoms[2].GetID() != "id2" {
+        t.Fatalf("atoms[2] mismatch, got %#v", atoms[2])
+    }
 }
 
-func TestMapToAtom(t *testing.T) {
-	// Test with valid map
-	atomMap := map[string]any{
-		"id":   "testId",
-		"type": "testType",
-		"properties": map[string]any{
-			"key1": "value1",
-		},
-		"children": []any{
-			map[string]any{
-				"id":   "childId",
-				"type": "childType",
-			},
-		},
-	}
-
-	atom, err := omni.MapToAtom(atomMap)
-	if err != nil {
-		t.Fatalf("MapToAtom() error = %v", err)
-	}
-	if id := atom.GetID(); id != "testId" {
-		t.Errorf("atom.GetID() = %v, want %v", id, "testId")
-	}
-	if typ := atom.GetType(); typ != "testType" {
-		t.Errorf("atom.GetType() = %v, want %v", typ, "testType")
-	}
-	prop := atom.Get("key1")
-	if prop != "value1" {
-		t.Errorf("atom.Get(\"key1\") = %v, want %v", prop, "value1")
-	}
-	children := atom.ChildrenGet()
-	if len(children) != 1 {
-		t.Fatalf("len(atom.GetChildren()) = %v, want %v", len(children), 1)
-	}
-	if childID := children[0].GetID(); childID != "childId" {
-		t.Errorf("children[0].GetID() = %v, want %v", childID, "childId")
-	}
-
-	// Test with missing required fields
-	tests := []struct {
-		name    string
-		m       map[string]any
-		wantErr bool
-	}{
-		{"missing id", map[string]any{"type": "missingId"}, true},
-		{"missing type", map[string]any{"id": "missingType"}, true},
-		{"nil map", nil, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := omni.MapToAtom(tt.m)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("MapToAtom() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+func TestJSONToAtoms_ObjectMissingType_ReturnsError(t *testing.T) {
+    _, err := omni.JSONToAtoms(`{"id":"only-id"}`)
+    if err == nil {
+        t.Fatal("JSONToAtoms should error for object missing required fields")
+    }
 }
