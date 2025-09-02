@@ -1,7 +1,7 @@
 package omni
 
 import (
-	"github.com/gouniverse/uid"
+	"github.com/dracory/uid"
 )
 
 // NewAtom creates a new Atom with the given type and applies the provided options.

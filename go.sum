@@ -1,4 +1,2 @@
-github.com/google/uuid v1.5.0 h1:1p67kYwdtXjb0gL0BPiP1Av9wiZPo5A8z2cWkTZ+eyU=
-github.com/google/uuid v1.5.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/gouniverse/uid v1.5.0 h1:evyGegnY7+KeYirDhJntI9xmODf8jPMQw8DlMpQIPnM=
-github.com/gouniverse/uid v1.5.0/go.mod h1:06dzYTyBLOu+iRlKZ8GxzEfgDSLyoZwgKns9Fcvt7G4=
+github.com/dracory/uid v1.8.0 h1:L2D8fNH0CcmJLD3TM8f9RZ9UCpHB1Bbi82n7PG4I+5M=
+github.com/dracory/uid v1.8.0/go.mod h1:ldOjQLmGsQO4/oRIp5dpgajX3Qf1FI4QMPD34lXSIMI=

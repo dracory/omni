@@ -1,6 +1,6 @@
-# Omni vs gouniverse/dataobject
+# Omni vs dracory/dataobject
 
-This document provides a detailed comparison between Omni and [gouniverse/dataobject](https://github.com/gouniverse/dataobject), highlighting their differences, use cases, and when to choose one over the other.
+This document provides a detailed comparison between Omni and [dracory/dataobject](https://github.com/dracory/dataobject), highlighting their differences, use cases, and when to choose one over the other.
 
 ## Core Concepts
 
@@ -12,7 +12,7 @@ This document provides a detailed comparison between Omni and [gouniverse/dataob
 - **Tree Structures**: Optimized for representing hierarchical data
 - **Serialization**: Supports JSON and Gob formats
 
-### gouniverse/dataobject
+### dracory/dataobject
 - **Flat Data Model**: Simple key-value store
 - **String-based**: All values are stored as strings
 - **Change Tracking**: Built-in dirty flag and change tracking
@@ -21,7 +21,7 @@ This document provides a detailed comparison between Omni and [gouniverse/dataob
 
 ## Feature Comparison
 
-| Feature | Omni | gouniverse/dataobject |
+| Feature | Omni | dracory/dataobject |
 |---------|------|----------------------|
 | **Data Model** | Hierarchical tree structure | Flat key-value store |
 | **Property Storage** | Map of string key-value pairs | Map of string key-value pairs |
@@ -60,7 +60,7 @@ atom.Set("email", "john@example.com")
 name := atom.Get("name") // "John Doe"
 ```
 
-**gouniverse/dataobject**
+**dracory/dataobject**
 ```go
 // Create a data object
 do := dataobject.New()
@@ -89,7 +89,7 @@ newAtom := &omni.Atom{}
 err = newAtom.FromGob(gobData)
 ```
 
-**gouniverse/dataobject**
+**dracory/dataobject**
 ```go
 // To JSON
 jsonStr, err := do.ToJSON()
@@ -123,7 +123,7 @@ do, err := dataobject.NewFromGob(gobData)
    - When you prefer a fluent, chainable API
    - For clean configuration with functional options
 
-## When to Use gouniverse/dataobject
+## When to Use dracory/dataobject
 
 1. **Simple Key-Value Storage**
    - For configuration data
@@ -180,6 +180,6 @@ func ConvertOmniToDataObject(atom omni.AtomInterface) *dataobject.DataObject {
 
 ## Conclusion
 
-Both Omni and gouniverse/dataobject serve different purposes and have their own strengths. Choose Omni when you need hierarchical data structures, thread safety, and a functional API. Opt for gouniverse/dataobject when you need a simple, flat key-value store with change tracking.
+Both Omni and dracory/dataobject serve different purposes and have their own strengths. Choose Omni when you need hierarchical data structures, thread safety, and a functional API. Opt for dracory/dataobject when you need a simple, flat key-value store with change tracking.
 
-For applications that deal with complex domain models or component-based architectures, Omni provides the necessary features for structured data. For simpler use cases where you just need a dynamic key-value store with change tracking, gouniverse/dataobject might be more appropriate.
+For applications that deal with complex domain models or component-based architectures, Omni provides the necessary features for structured data. For simpler use cases where you just need a dynamic key-value store with change tracking, dracory/dataobject might be more appropriate.
