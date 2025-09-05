@@ -213,14 +213,14 @@ func (a *Atom) ChildDeleteByID(id string) AtomInterface {
 
 // ChildFindByID returns the first immediate child with the given ID, or nil if not found.
 func (a *Atom) ChildFindByID(id string) AtomInterface {
-    a.mu.RLock()
-    defer a.mu.RUnlock()
-    for _, child := range a.children {
-        if child != nil && child.GetID() == id {
-            return child
-        }
-    }
-    return nil
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, child := range a.children {
+		if child != nil && child.GetID() == id {
+			return child
+		}
+	}
+	return nil
 }
 
 // ChildrenAdd adds multiple child atoms.
@@ -319,7 +319,6 @@ func (a *Atom) ToGob() ([]byte, error) {
 	// Register the type
 	gob.Register(&Atom{})
 
-
 	// Encode the data
 	if err := encoder.Encode(temp); err != nil {
 		return nil, fmt.Errorf("error encoding atom to gob: %v", err)
@@ -412,4 +411,19 @@ func (a *Atom) MemoryUsage() int {
 	size += 24
 
 	return size
+}
+
+func (a *Atom) RecursiveFindByID(id string) AtomInterface {
+	if a.GetID() == id {
+		return a
+	}
+	for _, child := range a.children {
+		if child != nil {
+			result := child.RecursiveFindByID(id)
+			if result != nil {
+				return result
+			}
+		}
+	}
+	return nil
 }

@@ -47,6 +47,8 @@ type AtomInterface interface {
 	// FindFirstByType(atomType string) AtomInterface
 	// FindByType(atomType string) []AtomInterface
 
+	RecursiveFindByID(id string) AtomInterface
+
 	// Serialization
 	ToMap() map[string]any
 	ToJSON() (string, error)
